@@ -34,6 +34,16 @@ STEPS = [("build", "Build the Docker image"), ("prepare", "Prepare the input"),
          ("run", "Run the container"), ("trace", "Trace every sentence"), ("check", "Check the output")]
 
 
+SAMPLE = ROOT / "sample" / "sample.csv"
+STANDIN = ROOT / "data" / "sample_standin.csv"
+
+
+def sample_file() -> Path:
+    """The organisers' 20 sample rows once they are published (09:00, 29 Oct), else our own
+    stand-in of 20 sentences written in the same style."""
+    return SAMPLE if SAMPLE.exists() else STANDIN
+
+
 def docker_exe() -> str | None:
     for c in (shutil.which("docker"), r"C:\Program Files\Docker\Docker\resources\bin\docker.exe"):
         if c and Path(c).exists():
@@ -84,7 +94,7 @@ class Job:
                 "elapsed": round(time.time() - self.started, 1) if self.started and self.state == "running" else None,
                 "peak_mb": round(self.peak_mb), "has_result": self.result is not None,
                 "container": self.container, "image": self.image,
-                "docker": docker_exe() is not None, "sample_available": (ROOT / "sample" / "sample.csv").exists()}
+                "docker": docker_exe() is not None, "sample_available": True, "sample_real": SAMPLE.exists()}
 
     def start(self, with_sample: bool) -> bool:
         with self.lock:
@@ -152,13 +162,14 @@ class Job:
                                 str(uni / "universe.csv")], capture_output=True, text=True, check=True)
             self.say(r.stdout)
             shutil.copy(ROOT / "data" / "lexicon.json", uni / "lexicon.json")
-            if with_sample and (ROOT / "sample" / "sample.csv").exists():
-                with open(ROOT / "sample" / "sample.csv", encoding="utf-8-sig", newline="") as f, \
+            if with_sample:
+                src = sample_file()
+                with open(src, encoding="utf-8-sig", newline="") as f, \
                         open(uni / "universe.csv", "a", encoding="utf-8", newline="") as g:
                     w, n = csv.writer(g), 0
                     for row in csv.DictReader(f):
                         w.writerow([row["id"], row["text"], row["date"], ""]); n += 1
-                self.say(f"added {n} sample rows (sample/sample.csv)")
+                self.say(f"added {n} sample rows ({src.relative_to(ROOT).as_posix()})")
             self._step("prepare", "done", time.time() - t)
             # while the container runs, the same code runs here on the same input and records
             # what every stage computed for each sentence it labels

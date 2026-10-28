@@ -136,7 +136,7 @@
     </div>
     <div class="actions">
       <button class="primary" id="start">Build and run in Docker</button>
-      <label class="check"><input type="checkbox" id="sample"> Also label the 20 sample sentences</label>
+      <label class="check"><input type="checkbox" id="sample" checked> <span id="sampleText">Also label the 20 sample sentences</span></label>
       <span class="note">Takes about 2 to 3 minutes.</span>
     </div>
     <div class="warn" id="dockerWarn">Docker isn't available on this computer. Install Docker Desktop, start it, and wait until it says
@@ -235,9 +235,8 @@ function drawSteps(s) {
   err.style.display = s.error ? "block" : "none"; err.textContent = s.error || "";
   $("#start").disabled = s.state === "running" || !s.docker;
   $("#dockerWarn").style.display = s.docker ? "none" : "block";
-  const sampleBox = $("#sample");
-  sampleBox.disabled = !s.sample_available;
-  sampleBox.parentElement.title = s.sample_available ? "" : "sample/sample.csv is published at 09:00 on 29 October";
+  $("#sampleText").textContent = s.sample_real ? "Also label the 20 sample sentences"
+    : "Also label 20 stand-in sample sentences (the real ones arrive at 09:00 on 29 October)";
 }
 
 async function poll() {
