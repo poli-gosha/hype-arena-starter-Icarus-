@@ -465,7 +465,8 @@ function build(t, docker, names) {
     html: `<div class="meter" style="--p:${pf};--c:${cutoff}"><span class="m-end">← true</span><span class="m-end r">false →</span>
         <div class="m-track"></div><div class="m-cut"><span>${pct(cutoff)}</span></div><div class="m-dot"><span>${(pf * 100).toFixed(1)}%</span></div></div>
       <p class="rule">${v.label === "unsure" ? `Unsure is the most likely of the three, so the answer is ${lab("unsure")}.`
-        : `P(false) <span class="mono">${(pf * 100).toFixed(1)}%</span> ${pf > cutoff ? "is above" : "is not above"} the <span class="mono">${pct(cutoff)}</span> cutoff, so ${lab(v.label)}, ${pct(v.confidence)} sure.`}</p>
+        : `P(false) <span class="mono">${(pf * 100).toFixed(1)}%</span> ${pf > cutoff ? "is above" : "is not above"} the <span class="mono">${pct(cutoff)}</span> cutoff, so ${lab(v.label)}.`}</p>
+      ${v.confidence != null ? `<p class="text">Confidence <b>${pct(v.confidence)}</b>: the trees' odds, corrected by how often calls like this one were right on the labelled rows.</p>` : ""}
       <p class="probs">${["true", "false", "unsure"].map(c => { const j = cls.indexOf(c); return `<span>${lab(c)} ${((j >= 0 ? probs[j] : 0) * 100).toFixed(1)}%</span>`; }).join("")}</p>
       <h3>The evidence that weighs most</h3>
       <dl class="ev">${lines.map(([a, b]) => `<dt>${esc(a)}</dt><dd>${esc(b ?? "–")}</dd>`).join("")}</dl>

@@ -34,13 +34,40 @@ def _words_ok(attribute: str, allow_digits: bool = True) -> bool:
 
 
 def _step_conf(step: Step) -> float:
-    """How sure we are of a stair: confirmed by labelled rows, or backed by agreeing rows
-    with little dissent. 0 means: never build a claim on it."""
+    """How sure we are of a stair: confirmed by labelled rows, or backed by agreeing rows,
+    and how credibly it is challenged (see _challenge). 0 means: never build a claim on it.
+    Measured with only 1 row in 10 labelled: fact claims on unchallenged stairs are 3% false,
+    on stairs challenged by a third of their support 40%."""
+    r = getattr(step, "challenge", None)
+    if r is None:  # not measured (a knowledge base the forge didn't prepare): any dissent counts
+        r = step.dissent / max(1, step.support)
     if step.anchors:
-        return min(0.99, 0.93 + 0.02 * step.anchors) if not step.dissent else 0.9
-    if step.support >= 3 and step.dissent * 3 <= step.support:
-        return min(0.9, 0.7 + 0.04 * step.support)
-    return 0.0
+        base = min(0.99, 0.93 + 0.02 * step.anchors)
+    elif step.support >= 3 and r <= 1 / 3:
+        base = min(0.9, 0.7 + 0.04 * step.support)
+    else:
+        return 0.0
+    if r == 0:
+        return base
+    if r < 0.2:
+        return min(base, 0.9)
+    if r < 1 / 3:
+        return 0.78 if step.anchors else 0.0
+    return 0.62 if step.anchors else 0.0
+
+
+def _challenge(kb: KB) -> None:
+    """Each stair's credible dissent: the rows that give the fact another value while the
+    stair holds, counting only rows nobody judged false (a lie that disagrees is no threat;
+    a row the judge believes may mean the value changed), per row that supports it."""
+    judged_false = getattr(kb, "judged_false", set())
+    for key, steps in kb.timelines.items():
+        ms = [m for m in kb.mentions.get(key, []) if m["verdict"] not in ("false", "unsure")
+              and m["row_id"] not in judged_false and m["value"].get("op", "eq") == "eq"]
+        for st in steps:
+            lo, hi = st.first_seen or st.start, st.end or "9999"
+            n = sum(1 for m in ms if lo <= m["date"] < hi and not same_value(m["value"], st.value))
+            st.challenge = n / max(1, st.support)
 
 
 def _precise(kb: KB, key: tuple, v: dict) -> dict | None:
@@ -241,11 +268,13 @@ GENERATORS = {"fact": fact_claims, "compare": compare_claims, "change": change_c
 # at_event, change, compare) are the point of the challenge; a type that falls short leaves
 # its slots to the most confident leftovers of the others
 QUOTA = {"fact": 250, "relation": 150, "at_event": 150, "change": 150, "compare": 300}
+QUOTA_MIN_CONF = float(__import__("os").environ.get("POLY_QUOTA_CONF", 0.85))
 
 
 def generate(kb: KB, input_texts: set[str], n: int = N_CLAIMS) -> list[Claim]:
     # the referee clone needs each fact's kind to know which compare phrases apply
     kb.lexicon._kinds = {key: steps[-1].value.get("kind") for key, steps in kb.timelines.items() if steps}
+    _challenge(kb)
     seen_text: set[str] = set()
     pools: dict[str, list[Claim]] = {}
     for t, gen in GENERATORS.items():
@@ -262,10 +291,14 @@ def generate(kb: KB, input_texts: set[str], n: int = N_CLAIMS) -> list[Claim]:
                     break
         pool.sort(key=lambda c: -c.confidence)
         pools[t] = pool
-    chosen = []
+    # a mix of types, but only from claims we're sure of: a quota never pulls in a shaky
+    # claim while a sure one of another type waits
+    chosen, rest = [], []
     for t, pool in pools.items():
-        chosen += pool[:QUOTA[t]]
-    rest = sorted((c for t, p in pools.items() for c in p[QUOTA[t]:]), key=lambda c: -c.confidence)
+        sure = [c for c in pool if c.confidence >= QUOTA_MIN_CONF]
+        chosen += sure[:QUOTA[t]]
+        rest += [c for c in pool if c not in chosen]
+    rest.sort(key=lambda c: -c.confidence)
     chosen += rest[: max(0, n - len(chosen))]
     chosen = sorted(chosen, key=lambda c: -c.confidence)[:n]
     for i, c in enumerate(chosen, 1):

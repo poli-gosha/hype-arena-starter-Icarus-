@@ -38,6 +38,27 @@ def test_end_to_end(lexicon, bundle):
         assert not validate(c, lexicon), (c.text, validate(c, lexicon))
 
 
+def test_dates_in_other_forms(tmp_path):
+    from polygraph.tables import iso_date, read_rows
+    assert iso_date("2026-4-7") == "2026-04-07"
+    assert iso_date("2026/04/14") == iso_date("14.04.2026") == iso_date("2026-04-14T09:30:00Z") == "2026-04-14"
+    assert iso_date("April 2026") == "2026-04-01" and iso_date("nonsense") is None and iso_date("2026-02-30") is None
+    f = tmp_path / "u.csv"
+    f.write_text("id,text,date,label\na,x,14.04.2026,TRUE\nb,y,,\nc,z,2026-05-01, False \n", encoding="utf-8")
+    rows = read_rows(f)
+    assert [(r.date, r.label, r.page) for r in rows] == [("2026-04-14", "true", 0), ("2026-04-14", "", 0), ("2026-05-01", "false", 1)]
+
+
+def test_practice_rows_found_under_other_ids(bundle):
+    """The input may give the practice rows ids of its own: they are matched by text and date."""
+    rows = [replace(r, id=f"u{i}") for i, r in enumerate(bundle.rows[:50])]
+    rows[3] = replace(rows[3], label="")  # an unlabelled row is never matched
+    b = bundle.aligned(rows)
+    assert all(r.id in b.forms for r in rows if r.label)
+    assert rows[3].id not in b.forms
+    assert b.forms["u0"] == bundle.forms[bundle.rows[0].id]
+
+
 def test_feature_names_match_the_judge(lexicon):
     """polygraph/explain.py names every feature judge.row_features builds, in order."""
     from polygraph import explain, judge, truth

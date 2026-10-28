@@ -33,12 +33,31 @@ def log(msg: str) -> None:
     print(f"{time.strftime('%H:%M:%S')}{left} {msg}", flush=True)
 
 
-def safe_output(rows, lexicon, bundle, out: Path) -> None:
+def safe_output(rows, lexicon, bundle, out: Path) -> list:
+    """Every unlabelled row `true` (most rows are), and claims from the practice facts alone.
+    Returns the claims, a fallback if the full run fails later."""
     verdicts = [Verdict(r.id, "true", 0.6) for r in rows if not r.label]
-    kb = KB.from_gold(lexicon, rows, {r.id: bundle.forms[r.id] for r in rows if r.label and r.id in bundle.forms})
-    claims = generate(kb, {normalize_text(r.text) for r in rows})
+    claims = []
+    try:
+        kb = KB.from_gold(lexicon, rows, {r.id: bundle.forms[r.id] for r in rows if r.label and r.id in bundle.forms})
+        claims = generate(kb, {normalize_text(r.text) for r in rows})
+    except Exception:
+        traceback.print_exc()
     write_output(out, verdicts, claims)
     log(f"safe output written: {len(verdicts)} labels, {len(claims)} claims")
+    return claims
+
+
+def _first_of_each_id(rows):
+    """The first row for an id counts (contracts/README.md); a repeated id is dropped."""
+    seen, out = set(), []
+    for r in rows:
+        if r.id not in seen:
+            seen.add(r.id)
+            out.append(r)
+    if len(out) < len(rows):
+        log(f"dropped {len(rows) - len(out)} rows that repeat an id")
+    return out
 
 
 def main(argv=None) -> int:
@@ -51,15 +70,25 @@ def main(argv=None) -> int:
     signal.signal(signal.SIGTERM, lambda *_: (log("SIGTERM: keeping the last complete table"), sys.exit(0)))
     out = Path(a.output) / "output.csv"
     rows, lexicon = pipeline.load_universe(a.universe)
-    bundle = pipeline.Bundle.load()
-    log(f"read {len(rows)} rows, {sum(not r.label for r in rows)} unlabelled; lexicon {len(lexicon.subjects)} subjects")
+    rows = _first_of_each_id(rows)
+    bundle = pipeline.Bundle.load().aligned(rows)
+    log(f"read {len(rows)} rows, {sum(not r.label for r in rows)} unlabelled; lexicon {len(lexicon.subjects)} subjects; "
+        f"{sum(1 for r in rows if r.label and r.id in bundle.forms)} practice rows recognised")
 
+    fallback_claims = []
     try:
-        safe_output(rows, lexicon, bundle, out)
+        fallback_claims = safe_output(rows, lexicon, bundle, out)
     except Exception:
         traceback.print_exc()
 
-    result = pipeline.run(rows, lexicon, bundle)
+    try:
+        result = pipeline.run(rows, lexicon, bundle)
+    except Exception:
+        # keep the labels if only the claims stage broke: judge again without it
+        traceback.print_exc()
+        log("the full run failed; labelling again without new claims")
+        result = pipeline.run(rows, lexicon, bundle, claims=False)
+        result.claims = fallback_claims
     for s in result.stages:
         log(f"  {s['name']:<10} {s['ms']:>9} ms  {s['count']}")
     write_output(out, result.verdicts, result.claims)

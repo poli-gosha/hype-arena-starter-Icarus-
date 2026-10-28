@@ -53,6 +53,11 @@ def words(text: str) -> list[str]:
     return list(_words(text))
 
 
+@lru_cache(maxsize=4_096)
+def _word_set(text: str) -> frozenset:
+    return frozenset(_words(text))
+
+
 @lru_cache(maxsize=20_000)
 def attr_tokens(attribute: str) -> frozenset:
     return frozenset(singular(t) for t in attribute.split("_") if t and t not in STOP)
@@ -166,17 +171,16 @@ class Attributor:
         v, start, end, is_alt = reading
         kind = v["kind"]
         kc = self.attr_kind.get(attribute)
-        total = sum(kc.values()) if kc else 0
-        p_kind = (kc[kind] + 0.1) / (total + 0.8) if kc else 0.125
+        p_kind = (kc[kind] + 0.1) / (self._sum(kc) + 0.8) if kc else 0.125
         uc = self.attr_unit.get(attribute)
         u = unit_of(v)
-        unit_seen = (uc[u] / max(1, sum(uc.values()))) if uc else 0.0
+        unit_seen = (uc[u] / max(1, self._sum(uc))) if uc else 0.0
         toks = attr_tokens(attribute)
         unit_word = singular(str(v.get("unit", ""))) if kind == "quantity" else ""
         unit_in_name = float(bool(unit_word) and unit_word in toks)
         cue = self._cue(attribute, win_words)
         name_overlap = len(toks & set(win_words)) / max(1, len(toks))
-        text_overlap = len(toks & set(words(row.text))) / max(1, len(toks))
+        text_overlap = len(toks & _word_set(row.text)) / max(1, len(toks))
         # subject position: in the sentence, or elsewhere on the page
         if subj.start < 0:
             dist, inherited = 1.0, 1.0
@@ -197,8 +201,7 @@ class Attributor:
         bc = self.bool_cues.get(attribute)
         bool_cue = 0.0
         if kind == "boolean" and bc:
-            tw = set(words(row.text))
-            bool_cue = sum(bc[w] for w in tw) / max(1, sum(bc.values()))
+            bool_cue = sum(bc[w] for w in _word_set(row.text)) / max(1, self._sum(bc))
         return [p_kind, unit_seen, unit_in_name, cue, name_overlap, text_overlap, dist, inherited, nearest,
                 before, math.log1p(self.attr_count[attribute]), float(kc is None), float(is_alt), name_seen,
                 self_ref, bool_cue, float(kind == "boolean"), float(kind == "name"), float("op" in v),
@@ -209,10 +212,37 @@ class Attributor:
         aw = self.attr_words.get(attribute)
         if not aw or not win_words:
             return 0.0
+        key = (attribute, tuple(win_words))
+        hit = self._cue_memo.get(key)
+        if hit is not None:
+            return hit
+        la, la0 = self._la.get(attribute) or self._log_attr(attribute)
+        lb, lb0 = self._lb
+        out = sum(la.get(w, la0) - lb.get(w, lb0) for w in win_words) / len(win_words)
+        self._cue_memo[key] = out
+        return out
+
+    def _log_attr(self, attribute):
+        """log P(word | attribute), smoothed, for the words seen with it; and for any other."""
+        aw = self.attr_words[attribute]
         na, vocab = self._totals.get(attribute) or self._total(attribute)
-        nall = self._nall
-        return sum(math.log((aw[w] + 0.5) / (na + 0.5 * vocab)) - math.log((self.all_words[w] + 0.5) / (nall + 0.5 * vocab))
-                   for w in win_words) / len(win_words)
+        d = na + 0.5 * vocab  # the very expressions the model was always trained on, bit for bit
+        t = ({w: math.log((c + 0.5) / d) for w, c in aw.items()}, math.log(0.5 / d))
+        self._la[attribute] = t
+        return t
+
+    def _sum(self, counter: Counter) -> int:
+        key = id(counter)
+        n = self._sums.get(key)
+        if n is None:
+            n = self._sums[key] = sum(counter.values())
+        return n
+
+    def _prepare(self):
+        vocab = len(self.all_words) + 1
+        d = self._nall + 0.5 * vocab
+        self._lb = ({w: math.log((c + 0.5) / d) for w, c in self.all_words.items()}, math.log(0.5 / d))
+        self._la, self._sums, self._cue_memo = {}, {}, {}
 
     def _total(self, attribute):
         t = (sum(self.attr_words[attribute].values()), len(self.all_words) + 1)
@@ -253,6 +283,7 @@ class Attributor:
             subjects.append(Mention(self.company, -1, -1, "", 50, 0, False, False))
         on_page = {m.subject for m in subjects}
         cands, feats = [], []
+        self._cue_memo = {}
         squashed = re.sub(r"[^a-z0-9]", "", row.text.lower())
         text_stems = stems(_blank(row.text, skip))
         for reading in self._readings(row, values, mentions):
@@ -306,6 +337,7 @@ class Attributor:
                 self.all_words.update(win)
                 self.unit_index[unit_of(v)].add((f["subject"], a))
         self._totals, self._nall = {}, sum(self.all_words.values())
+        self._prepare()
         # pairs
         X, y = [], []
         for r in rows:

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import os
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from itertools import groupby
 from pathlib import Path
 
@@ -40,6 +40,31 @@ class Bundle:
     def load(cls, practice: str | Path = BUNDLED_PRACTICE) -> "Bundle":
         return cls(read_practice_forms(practice), read_rows(practice))
 
+    def aligned(self, rows: list[Row]) -> "Bundle":
+        """The practice rows under the ids the input gives them. The input holds the practice
+        rows with their labels, but nothing promises their ids are the practice file's: a
+        labelled input row whose id we don't know is matched by its text and date, and the
+        practice row takes its id. Unlabelled rows are never matched (no gold for them)."""
+        known = {r.id for r in self.rows}
+        loose = [r for r in rows if r.label and r.id not in known]
+        if not loose:
+            return self
+        key = lambda r: (" ".join(r.text.split()).lower(), r.date)  # noqa: E731
+        taken = {r.id for r in rows}
+        pool: dict = {}
+        for r in self.rows:
+            if r.id not in taken:
+                pool.setdefault(key(r), []).append(r.id)
+        rename = {}
+        for r in loose:
+            ids = pool.get(key(r))
+            if ids:
+                rename[ids.pop(0)] = r.id
+        if not rename:
+            return self
+        return Bundle({rename.get(i, i): f for i, f in self.forms.items()},
+                      [replace(r, id=rename.get(r.id, r.id)) for r in self.rows])
+
 
 def run(rows: list[Row], lexicon: Lexicon, bundle: Bundle, *, claims: bool = True,
         gold_extraction: bool = False, cache: str | Path | None = None,
@@ -55,6 +80,7 @@ def run(rows: list[Row], lexicon: Lexicon, bundle: Bundle, *, claims: bool = Tru
     demo request only extracts and judges its own new rows.
     """
     stages: list[dict] = []
+    bundle = bundle.aligned(rows)
 
     def stage(name, t0, count):
         stages.append({"name": name, "ms": round((time.perf_counter() - t0) * 1000, 1), "count": count})
@@ -103,7 +129,10 @@ def run(rows: list[Row], lexicon: Lexicon, bundle: Bundle, *, claims: bool = Tru
 
     t = time.perf_counter()
     kb.judged_false = {v.id for v in verdicts if v.label == "false"}  # the forge won't build on these
-    out_claims = forge.generate(kb, {normalize_text(r.text) for r in rows}) if claims else []
+    input_texts = {normalize_text(r.text) for r in rows}
+    out_claims = forge.generate(kb, input_texts) if claims else []
+    if claims and len(out_claims) < forge.N_CLAIMS:
+        out_claims = _top_up(out_claims, lexicon, bundle, input_texts)
     stages.append({"name": "forge", "ms": round((time.perf_counter() - t) * 1000, 1), "count": len(out_claims)})
 
     if explain.IDS:
@@ -112,6 +141,19 @@ def run(rows: list[Row], lexicon: Lexicon, bundle: Bundle, *, claims: bool = Tru
             explain.put(v.id, "verdict", {"label": v.label, "confidence": v.confidence, "why": v.why,
                                           "csv": f"{v.id},,,,{v.label},{'' if v.label == 'unsure' else _conf(v.confidence)}"})
     return Result(verdicts, out_claims, kb, facts, stages)
+
+
+def _top_up(claims: list[Claim], lexicon: Lexicon, bundle: Bundle, input_texts: set[str]) -> list[Claim]:
+    """The run's knowledge base gave fewer than 1,000 claims (the input labelled too little
+    of what we know): fill up with claims on the practice facts the image carries. Every
+    missing claim scores nothing, so a claim from the practice facts is always better."""
+    gold = KB.from_gold(lexicon, bundle.rows, bundle.forms)
+    have = {normalize_text(c.text) for c in claims}
+    extra = [c for c in forge.generate(gold, input_texts) if normalize_text(c.text) not in have]
+    out = claims + extra[: forge.N_CLAIMS - len(claims)]
+    for i, c in enumerate(out, 1):
+        c.id = f"c{i:04d}-{c.type}"
+    return out
 
 
 def _explain_reading(rows, mentions, values):
@@ -141,6 +183,10 @@ def _extract(rows, lexicon, bundle, gold_extraction, linker, mentions, values, w
     # train the attributor on the practice rows the input labels (never on a hidden one)
     labelled = {r.id for r in rows if r.label}
     train = [r for r in bundle.rows if r.id in labelled and r.id in bundle.forms]
+    if not train and not gold_extraction:
+        # no practice row is labelled in the input (the contract says they all are): the
+        # practice forms the image carries still teach extraction
+        train = [r for r in bundle.rows if r.id in bundle.forms]
     facts: dict[str, list[Fact]] = {}  # the best facts we have: gold for labelled practice rows
     for r in rows:
         if r.id in bundle.forms and (r.label or gold_extraction):

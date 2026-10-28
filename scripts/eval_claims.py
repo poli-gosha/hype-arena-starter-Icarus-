@@ -79,12 +79,18 @@ def truth(c, gold: KB) -> str:
 def main() -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--show", type=int, default=0)
+    p.add_argument("--keep", type=int, default=0,
+                   help="keep only every Nth label (10: the judges' run, where ~10%% of rows are labelled)")
     a = p.parse_args()
     lex = Lexicon.load(ROOT / "data" / "lexicon.json")
     b = pipeline.Bundle.load()
     gold = KB.from_gold(lex, b.rows, b.forms)
-    rows = [replace(r, label="" if i % 5 == 0 else r.label) for i, r in enumerate(b.rows)]
-    res = pipeline.run(rows, lex, b, cache=ROOT / "out" / "cache" / "fold0.pkl")
+    if a.keep:
+        rows = [replace(r, label=r.label if i % a.keep == 0 else "") for i, r in enumerate(b.rows)]
+        res = pipeline.run(rows, lex, b, cache=ROOT / "out" / "cache" / f"keep{a.keep}.pkl")
+    else:
+        rows = [replace(r, label="" if i % 5 == 0 else r.label) for i, r in enumerate(b.rows)]
+        res = pipeline.run(rows, lex, b, cache=ROOT / "out" / "cache" / "fold0.pkl")
     by = Counter()
     examples = {}
     for c in res.claims:
@@ -95,6 +101,11 @@ def main() -> int:
     print(f"{len(res.claims)} claims         " + "".join(f"{t:>10}" for t in types) + "     total")
     for v in ("true", "unknown", "FALSE", "INVALID"):
         print(f"  {v:<16}" + "".join(f"{by[(t, v)]:>10}" for t in types) + f"{sum(by[(t, v)] for t in types):>10}")
+    # how truth holds up by confidence (0.93+: confirmed by labelled rows; below: support alone)
+    for lo, hi in ((0.93, 1.01), (0.9, 0.93), (0.0, 0.9)):
+        cs = [c for c in res.claims if lo <= c.confidence < hi]
+        vs = Counter("INVALID" if validate(c, lex) else truth(c, gold) for c in cs)
+        print(f"  confidence {lo:.2f}-{min(hi, 1):.2f}: {len(cs):4d} claims, {vs['true']} true, {vs['FALSE']} false, {vs['unknown']} unknown")
     if a.show:
         for v in ("FALSE", "unknown", "true"):
             print(f"\n== {v}")

@@ -48,6 +48,10 @@ SOFT_LO, SOFT_HI = 0.08, 0.85
 SELF_ROUNDS = int(os.environ.get("POLY_ROUNDS_SELF", 1))  # self-training passes  # P(false) below / above which a verdict counts as confident
 TEXT_MODEL = os.environ.get("POLY_TEXT", "0") == "1"  # a word-pattern model as a judge input (5-fold CV: no gain, off)
 PROBA: dict[str, dict] = {}  # last run's class probabilities per row (for analysis)
+# confidence: the trees' probability, recalibrated on how often the judge was actually right
+# out of fold on the labelled rows (5-fold CV: Brier down, labels unchanged)
+CALIBRATE = float(os.environ.get("POLY_CALIB", 1))  # weight of the calibrated value (0 = raw)
+_LAST: dict = {}  # the last training set of _fit_predict, for the calibration
 STATUS = ["agrees", "stale", "premature", "invented", "unknown"]
 
 HEDGE_RE = re.compile(r"\b(?:i have been told|i've been told|i hear|i heard|reportedly|rumou?r|apparently|word is|"
@@ -419,6 +423,7 @@ def label(rows: list[Row], facts: dict[str, list[Fact]], lexicon: Lexicon,
             proba, classes, feats, _, pu = _fit_predict(rows, facts, lexicon, extracted, ctx, labelled, unlabelled, soft)
     if not unlabelled:
         return [], t
+    calib = _calibrator() if CALIBRATE and _LAST else None
     out = []
     for r, p in zip(unlabelled, proba):
         x, details, worst = feats[r.id]
@@ -429,21 +434,52 @@ def label(rows: list[Row], facts: dict[str, list[Fact]], lexicon: Lexicon,
                                         "cutoff": FALSE_CUTOFF, "self_training": SELF_TRAIN,
                                         "first_pass_p_false": round(float(pu_first.get(r.id, -1)), 4)})
         PROBA[r.id] = dict(zip(classes, map(float, p)))
-        i = int(np.argmax(p))
-        lab = classes[i]
-        if lab != "unsure" and "false" in classes and "true" in classes:
-            pt, pf = p[classes.index("true")], p[classes.index("false")]
-            lab = "false" if pf / max(1e-9, pt + pf) > FALSE_CUTOFF else "true"
+        lab, conf = _decide(p, classes)
         why = _why(lab, worst, details)
         if lab == "unsure":
             out.append(Verdict(r.id, "unsure", None, why, details))
         else:
-            # confidence: the probability the call is right, among true/false
-            pt = p[classes.index("true")] if "true" in classes else 0
-            pf = p[classes.index("false")] if "false" in classes else 0
-            conf = max(pt, pf) / max(1e-9, pt + pf)
+            if calib is not None:
+                conf = (1 - CALIBRATE) * conf + CALIBRATE * calib(lab, conf)
             out.append(Verdict(r.id, lab, float(min(1.0, max(0.5, conf))), why, details))
     return out, t
+
+
+def _decide(p, classes) -> tuple[str, float]:
+    """The label from the class probabilities, and the raw confidence: the probability the
+    call is right, among true and false."""
+    lab = classes[int(np.argmax(p))]
+    pt = p[classes.index("true")] if "true" in classes else 0
+    pf = p[classes.index("false")] if "false" in classes else 0
+    if lab != "unsure" and "false" in classes and "true" in classes:
+        lab = "false" if pf / max(1e-9, pt + pf) > FALSE_CUTOFF else "true"
+    return lab, max(pt, pf) / max(1e-9, pt + pf)
+
+
+def _calibrator():
+    """How often a call of each label at each raw confidence was right, out of fold on the
+    labelled rows: an isotonic map per label (true calls and false calls err differently)."""
+    from sklearn.isotonic import IsotonicRegression
+    X, y, groups = _LAST["X"], _LAST["y"], _LAST["groups"]
+    pts: dict[str, list] = {"true": [], "false": []}
+    for g in np.unique(groups):
+        tr, te = groups != g, groups == g
+        if len(set(y[tr])) < 2:
+            continue
+        m = _model().fit(X[tr], y[tr])
+        cls = list(m.classes_)
+        for p, truth in zip(m.predict_proba(X[te]), y[te]):
+            lab, conf = _decide(p, cls)
+            if lab in pts:
+                pts[lab].append((conf, float(truth == lab)))
+    fits = {}
+    for lab, xs in pts.items():
+        if len(xs) >= 30:
+            a = np.asarray(xs)
+            fits[lab] = IsotonicRegression(y_min=0.5, y_max=0.995, out_of_bounds="clip").fit(a[:, 0], a[:, 1])
+    if not fits:
+        return None
+    return lambda lab, conf: float(fits[lab].predict([conf])[0]) if lab in fits else conf
 
 
 def _fit_predict(rows, facts, lexicon, extracted, ctx, labelled, unlabelled, soft=None):
@@ -500,6 +536,7 @@ def _fit_predict(rows, facts, lexicon, extracted, ctx, labelled, unlabelled, sof
             X = np.hstack([X, _page_scores(ids, page_of, score)])
             Xu = np.hstack([Xu, _page_scores([r.id for r in unlabelled], page_of, score)])
         model = _model().fit(X, y)
+        _LAST.update(X=X, y=y, groups=groups)
         proba = model.predict_proba(Xu)
         if explain.IDS:
             for r, xu in zip(unlabelled, Xu):
@@ -508,6 +545,7 @@ def _fit_predict(rows, facts, lexicon, extracted, ctx, labelled, unlabelled, sof
         classes = list(model.classes_)
         pu = dict(zip([r.id for r in unlabelled], _pfalse(model, Xu)))
     else:
+        _LAST.clear()
         proba = np.tile([PRIOR_TRUE, 1 - PRIOR_TRUE], (len(unlabelled), 1))
         classes = ["true", "false"]
         pu = {}
