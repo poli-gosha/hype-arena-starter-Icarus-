@@ -161,7 +161,7 @@ def relation_claims(kb: KB) -> Iterator[Claim]:
 GENERATORS = {"fact": fact_claims, "compare": compare_claims, "change": change_claims,
               "at_event": at_event_claims, "relation": relation_claims}
 # how many of the 1,000 each type may take at most, before topping up with the rest
-QUOTA = {"fact": 350, "relation": 150, "at_event": 150, "change": 150, "compare": 400}
+QUOTA = {"fact": 350, "relation": 20, "at_event": 100, "change": 150, "compare": 380}
 
 
 def generate(kb: KB, input_texts: set[str], n: int = N_CLAIMS) -> list[Claim]:
@@ -185,6 +185,8 @@ def generate(kb: KB, input_texts: set[str], n: int = N_CLAIMS) -> list[Claim]:
     chosen += rest[: max(0, n - len(chosen))]
     chosen.sort(key=lambda c: -c.confidence)
     chosen = chosen[:n]
+    if len(chosen) != n:
+        raise RuntimeError(f"claim forge produced {len(chosen)} claims; expected {n}")
     for i, c in enumerate(chosen, 1):
         c.id = f"c{i:04d}-{c.type}"
     return chosen

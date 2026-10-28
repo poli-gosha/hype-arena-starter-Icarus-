@@ -14,6 +14,8 @@ import re
 from . import reader
 from .lexicon import Lexicon
 from .model import Claim
+from .model import value_key
+from .render import attribute_words
 
 TYPES = {"fact", "compare", "change", "at_event", "relation"}
 ID = re.compile(r"^[A-Za-z0-9_.-]{1,64}$")
@@ -76,6 +78,8 @@ def validate(claim: Claim, lex: Lexicon, input_texts: set[str] | None = None) ->
     if claim.type == "relation":
         _names_ok(lex, f.get("subject", ""), f.get("link", ""), why, "link")
         _names_ok(lex, f.get("target", ""), f.get("attribute", ""), why, "target")
+        if not _relation_words_present(claim.text, f.get("subject", ""), f.get("link", ""), lex):
+            why.append("relation words or subject missing from text")
     for k in ("value", "from", "to"):
         if isinstance(f.get(k), dict) and "op" in f[k]:
             why.append(f"{k} has an op")
@@ -99,8 +103,109 @@ def validate(claim: Claim, lex: Lexicon, input_texts: set[str] | None = None) ->
     if NEGATION.search(text) and not _is_boolean(claim):
         why.append("negation")
     if reader.IMPLEMENTED:
-        pass  # TODO(forge): read the text back with reader.parse_values and check the values
+        why.extend(_validate_text_values(claim, lex))
     return why
+
+
+def _validate_text_values(claim: Claim, lex: Lexicon) -> list[str]:
+    """Check that the referee-style reader sees exactly the claim's values."""
+    text = claim.text
+    names = _name_spans(text, lex)
+    spans = reader.sentences(text)
+    if len(spans) != 1:
+        return ["claim text must hold its form in one sentence"]
+
+    parsed = reader.parse_values(text, names)
+    numeric = [v for v in parsed if not v.negated]
+    form = claim.form
+
+    if claim.type == "compare":
+        if numeric:
+            return ["compare text states a value"]
+        if not _compare_phrase_matches(text, form.get("op")):
+            return ["compare text does not contain exactly one allowed op phrase"]
+        return []
+
+    expected = []
+    if claim.type == "change":
+        expected = [form.get("from"), form.get("to")]
+    else:
+        expected = [form.get("value")]
+
+    expected = [v for v in expected if isinstance(v, dict)]
+    problems = []
+    if any(v.get("kind") == "name" for v in expected):
+        for value in expected:
+            if value.get("kind") == "name" and lex.canonical(value.get("value", "")) is None:
+                problems.append(f"unknown name value {value.get('value')!r}")
+    expected_numeric = [v for v in expected if v.get("kind") not in ("name", "boolean")]
+    if len(numeric) != len(expected_numeric):
+        problems.append(f"reader found {len(numeric)} values, expected {len(expected_numeric)}")
+    elif any(value_key(a.value) != value_key(b) for a, b in zip(numeric, expected_numeric)):
+        problems.append("reader values do not match the claim form")
+
+    for value in expected:
+        if value.get("kind") == "name" and not _value_name_present(text, value["value"], lex):
+            problems.append(f"name value missing from text: {value['value']!r}")
+        if value.get("kind") == "boolean":
+            if not _boolean_text_matches(text, claim, value):
+                problems.append("boolean attribute or polarity missing from text")
+    if claim.type in ("fact", "change", "at_event"):
+        subject = form.get("subject", "")
+        if not _value_name_present(text, subject, lex):
+            problems.append("subject missing from text")
+    if claim.type == "at_event":
+        if not _value_name_present(text, form.get("event", ""), lex):
+            problems.append("event missing from text")
+        if not re.search(r"\b(?:at|during|on the day of|at the time of)\b", text, re.I):
+            problems.append("event phrase missing from text")
+    return problems
+
+
+def _name_spans(text: str, lex: Lexicon) -> list[tuple[int, int]]:
+    from .linker import Linker
+    linker = getattr(lex, "_linker", None) or Linker(lex)
+    lex._linker = linker
+    return [(m.start, m.end) for m in linker.find(text)]
+
+
+def _value_name_present(text: str, name: str, lex: Lexicon) -> bool:
+    if not name:
+        return False
+    canon = lex.canonical(name)
+    if canon is None:
+        return False
+    linker = getattr(lex, "_linker", None)
+    if linker is None:
+        from .linker import Linker
+        linker = Linker(lex)
+        lex._linker = linker
+    return any(lex.canonical(m.subject) == canon for m in linker.find(text))
+
+
+def _relation_words_present(text: str, subject: str, link: str, lex: Lexicon) -> bool:
+    return _value_name_present(text, subject, lex) and bool(
+        re.search(r"(?<![A-Za-z0-9])" + re.escape(attribute_words(link)).replace("_", r"[\s_-]*")
+                  + r"(?![A-Za-z0-9])", text, re.I)
+    )
+
+
+def _boolean_text_matches(text: str, claim: Claim, value: dict) -> bool:
+    attr = claim.form.get("attribute", "")
+    words = r"[\s_-]*".join(re.escape(part) for part in re.split(r"[_\s-]+", attr) if part)
+    has_attribute = bool(re.search(words, text, re.I))
+    negative = bool(NEGATION.search(text))
+    return has_attribute and negative is (value.get("value") is False)
+
+
+def _compare_phrase_matches(text: str, op: str) -> bool:
+    phrases = {
+        "gt": r"(?:more|higher|greater|larger|bigger|longer)\b[^.?!]*?\bthan\b",
+        "lt": r"(?:less|fewer|lower|smaller|shorter|cheaper)\b[^.?!]*?\bthan\b",
+        "eq": r"(?:the same|as much|as many|as long|as high|equal to)\b[^.?!]*?\b(?:as|to)\b",
+    }
+    matches = re.findall(phrases.get(op, r"$^"), text, re.I)
+    return len(matches) == 1
 
 
 def _is_boolean(claim: Claim) -> bool:
