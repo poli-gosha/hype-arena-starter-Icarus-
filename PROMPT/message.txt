@@ -1,0 +1,175 @@
+# Plan: "Polygraph" (working name), our Hype Arena entry
+
+## Context
+
+**What we're building.** This is QA DNA's "Hype or Truth" challenge at the NEXXT AI hackathon. The repo is cloned at `D:\Desktop\NEXXT_AI`. `origin` is the fork `tudsac2308/hype-arena-starter`, and `upstream` is the QA-DNA repo.
+
+**The system** gets about 20,000 sentences about a fictional company, Hooly. About 1,900 practice rows are labelled; the rest are not. It must:
+1. Label every unlabelled row `true`, `false` or `unsure`, with a confidence.
+2. Write exactly 1,000 new claims, every one true and in a strict sentence format.
+
+**Constraints:**
+- The runtime system may NOT be an LLM. LLMs may help build it.
+- It runs offline in Docker: 2 CPUs, 6 GiB, 30 minutes.
+- It needs a frontend with a live architecture diagram that runs the system on the 20-row sample (released 09:00, 29 Oct).
+
+**Deadlines:**
+- The PR must be open before 11:00 on 29 Oct.
+- The video is due at 11:00.
+- The finalists pitch at 17:00.
+
+### What the data analysis showed (this drives the design)
+
+**Rows are facts.** Every row states 1–8 facts of the form (subject, attribute, value). The practice set has 514 distinct facts, and most are mentioned 2–49 times across the year.
+
+**Each fact is a step function over time.** For example, Jules supports 8 languages and then 14 from Aug 2026. Most rows repeat the current value.
+
+**Lies come in three kinds:**
+- Invented values that are never true elsewhere (~42%).
+- Stale values that were true earlier (~29%).
+- Premature values that become true later (~17%).
+
+**Whole pages lie.** Rows from one page (same date, consecutive ids) cluster: 11 pages are 100% false. Hedging ("I have been told") signals `unsure`. Speakers like `Gavin:` (the hype CEO) lie more often than average.
+
+**Majority voting alone is not enough.** Naive "majority of other mentions" or step-function fitting without labels reaches only 80–85% on practice. The wins come from combining the timeline with page trust, labelled anchors and a learned meta-model.
+
+**Scoring is not published.** The site only says confidence is part of the answer, so calibrated confidences matter.
+
+## Recommended approach: a temporal truth-discovery engine (no LLM at runtime)
+
+The engine is one Python package, `polygraph/`, used by both the Docker run and the frontend:
+
+```
+universe.csv + lexicon.json
+   │
+1. READER     deterministic value parser = a clone of the referee's value-forms.md
+   │          (numbers, units, money, %, dates, versions, durations, names, yes/no, negation, ops)
+2. LINKER     finds subjects via lexicon names/aliases (longest match);
+   │          pronouns ("Its", "He") → the last subject named on the same page
+3. ATTRIBUTOR picks the attribute for each value: a small classifier trained on the 2,400 practice facts
+   │          (value kind + unit + cue words); cue lists for every attribute are written at build time by an LLM (allowed)
+4. TRUTH ENGINE  per fact: a timeline of mentions → fit the step function (dynamic programming),
+   │          iterating with PAGE TRUST (EM-style truth discovery); labelled rows are fixed anchors
+5. JUDGE      per row: features (agreement with timeline, support, page trust, hedges, speaker, outlier…)
+   │          → a gradient-boosted model trained AT RUNTIME on the labelled rows → calibrated P(true/false/unsure)
+6. CLAIM FORGE builds a knowledge base of trusted facts → candidates of all 5 types → renders them with templates
+   │          → validates each with our own referee clone (step 1 + claim-forms rules) → keeps the best 1,000, mixing types
+7. WRITER     writes a safe fallback output within the first minute, then the improved one; atomic rename; watches ARENA_DEADLINE
+```
+
+Why this is efficient:
+- **One parser does two jobs.** The value parser (step 1) reads the input rows and also checks our own claims. Every example in `contracts/*.md` is a free unit test.
+- **We can train on what we're given.** Training at runtime on the 1,900 labelled rows means the model adapts to the real 20k distribution.
+- **A safety net comes first.** A valid but dumb output (all `true` plus simple fact claims) ships in Phase 0, so we can never hand in nothing.
+
+### Repo layout (new files)
+
+| Path | What |
+| --- | --- |
+| `Dockerfile` | python:3.12-slim, copies the `polygraph/` package and artifacts, ends with `USER 10001`, sets HOME/caches to `/tmp` |
+| `polygraph/reader.py` | Value parser (referee clone) |
+| `polygraph/linker.py` | Subject linker |
+| `polygraph/attributor.py` | Attribute classifier |
+| `polygraph/truth.py` | Timelines and page-trust iteration |
+| `polygraph/judge.py` | Runtime meta-model |
+| `polygraph/forge.py` | Claim generator |
+| `polygraph/validate.py` | Claim validator |
+| `polygraph/run.py` | Entrypoint (`/universe` → `/output`), plus `--trace` mode for the frontend |
+| `polygraph/artifacts/` | Build-time cue lists and templates (LLM-assisted, committed) |
+| `tests/` | pytest: every example in `contracts/*.md`, practice-form extraction recall, cross-validated label accuracy |
+| `server/app.py` | FastAPI: `/run` (rows → per-step trace + verdicts), `/kb`, `/claims` |
+| `web/` | React + Vite + Tailwind frontend (see concept below), served by FastAPI after build |
+| `scripts/demo.ps1` / `scripts/demo.sh` / `docker-compose.yml` | "What starts the frontend": one command |
+
+Existing files to reuse:
+- `scripts/check.sh`, `scripts/input.py` and `scripts/check_output.py` give the official validation loop.
+- We reuse `input.py`'s hide-every-5th split for local evaluation, without Docker.
+
+### Frontend concept (decided): Polygraph console, dark noir + neon
+
+**Look:**
+- Near-black background.
+- Neon green for truth, red for hype, amber for unsure.
+- Monospace readouts and subtle scanlines.
+
+"Polygraph" is a lie-detector console for Hooly:
+- **Live architecture diagram.** Built with React Flow. Each stage node lights up, and counters tick as rows flow through.
+- **Run panel.** Paste or upload rows, or click "Load sample.csv". Each row gets a polygraph-needle animation, then a TRUE/FALSE/UNSURE stamp with its confidence.
+- **Evidence board** (click a row). The fact's timeline appears as a step chart over the year. Every mention is a dot (green true, red false), the row is highlighted, and there's a one-line "why", e.g. "Stale: Jules went from 8 to 14 languages in Aug 2026".
+- **Claim Forge tab.** The 1,000 claims, filterable by type. Each shows the facts it connects as a mini graph.
+- **Hype meter.** Which pages and speakers lie most (a Gavin Belson joke writes itself).
+
+## Scope update (from the user): a backend workspace for you and the Python teammate
+
+**The frontend teammate works on their own.** We don't build the UI. We only give them:
+- the API (`server/app.py`);
+- the trace JSON contract;
+- a mock `web/public/mock/trace.json`;
+- a short `docs/BRIEF_frontend.md`.
+
+**Our job is a backend workspace that just works.** Phase 0 creates:
+
+| Path | What |
+| --- | --- |
+| `pyproject.toml` / `requirements.txt` | Python 3.12, pandas, numpy, scikit-learn (or lightgbm), fastapi, uvicorn, pytest. Pinned, and also used by the Dockerfile. |
+| `scripts/setup.ps1` | One command on Windows: creates `.venv`, installs the requirements, runs the tests. Plus `scripts/setup.sh` for Mac/Linux. |
+| `scripts/eval.py` | **Local evaluation without Docker.** Runs `input.py`'s hide-every-5th split, runs the engine in-process and prints label accuracy + a confusion matrix, claims validity and a per-stage timing. This is the main dev loop for both of you. |
+| `scripts/run_local.ps1` | Runs `polygraph.run` on the practice data into `out/`, then `check_output.py`. Same as the judges, minus Docker. |
+| `polygraph/` | Package skeleton with every module stubbed and its interface typed: `reader`, `linker`, `attributor`, `truth`, `judge`, `forge`, `validate`, `kb`, `run`. A trivial baseline makes the whole pipeline produce a valid output from minute one. |
+| `tests/` | `test_reader.py` (every example table in `contracts/value-forms.md` + `claim-forms.md`, parsed from the markdown automatically), `test_extraction.py` (recall against practice forms), `test_output.py` (format checks). |
+| `Dockerfile`, `.dockerignore`, `.gitignore` | Docker image ending in `USER 10001`; ignores `.venv/`, `out/`, `__pycache__`. |
+| `docs/WORKFLOW.md` | Beginner git guide: clone, branch, commit, pull, push, open a PR into `main`, resolve a conflict. Also how to run setup/eval/check. |
+| `docs/BRIEF_backend.md` | The Python teammate's self-contained brief (tool-agnostic): own `forge.py` + `validate.py` + `server/app.py`, built on the gold KB from practice forms, with acceptance checks. |
+| `docs/ARCHITECTURE.md` | The pipeline diagram (mermaid) + module contracts. The pitch and the frontend reuse it. |
+
+**Git setup:** `main` is protected by convention (only the captain merges). Branches are `engine` (you + me) and `forge` (backend teammate).
+
+## Team and roles (decided: 1 frontend + 1 Python teammate, all-nighter)
+
+| Who | Owns | Starts from |
+| --- | --- | --- |
+| **You (captain)** | Running Claude, git merges into `main`, running `check.sh`, the PR, recording the video, leading the pitch | This session |
+| **Claude (this session)** | The engine: `reader`, `linker`, `attributor`, `truth`, `judge`, `run.py`, the Dockerfile, tests | Phase 0 immediately |
+| **Teammate A (frontend)** | `web/`: the Polygraph console | `docs/BRIEF_frontend.md` + `web/public/mock/trace.json` (I write both in Phase 0) |
+| **Teammate B (Python)** | `polygraph/forge.py` (claim generator with templates for all 5 types) + `server/app.py` (FastAPI glue) | `docs/BRIEF_forge.md`. They build on a **gold knowledge base** made from the practice rows' `form` column, so they don't wait for the engine. They use the same KB interface the engine fills later. |
+
+**Notes:**
+- Teammates use other AI tools, so the briefs are tool-agnostic and self-contained: goal, file paths, data contracts, acceptance checks.
+- Each person works on their own branch (`frontend`, `forge`). The captain (with me) merges into `main`.
+
+### Data contracts fixed in Phase 0 (so everyone can work in parallel)
+
+- **Trace JSON** (engine → UI), produced by `/run`:
+  - `stages[]`: name, row count, ms.
+  - `rows[]`: id, text, date, facts (subject, attribute, value, text span, status `agrees|stale|premature|invented|unknown`), page_trust, verdict, confidence, why.
+  - `timelines{}`: per `subject|attribute`, the steps (from, to, value) and mentions (date, value, row_id, verdict).
+- **KB interface** (truth → forge): `kb.timeline(subject, attribute) → [Step(start, end, value, confidence)]`, `kb.events → {name: date}`, `kb.links → (subject, link_attr) → target steps`.
+- **Claims JSON**: id, type, text, form, confidence, `sources[]` (the facts it connects). Used by both the CSV writer and the UI.
+
+## Your setup steps (do these now, in parallel with Phase 0)
+
+1. **Install Docker Desktop.** Open PowerShell as Administrator and run `wsl --install` (reboot if asked), then `winget install Docker.DockerDesktop`. Start Docker Desktop once, then check that `docker run hello-world` works.
+2. **Add teammates to the fork.** On github.com/tudsac2308/hype-arena-starter go to Settings → Collaborators → Add people, and enter each teammate's GitHub username. They accept the email invite.
+3. **Send teammates their brief** once I've written it in Phase 0. They run `git clone https://github.com/tudsac2308/hype-arena-starter.git`, then `git checkout -b frontend` (or `forge`).
+4. Pick the **team name** before we open the PR. A placeholder is fine for the draft PR.
+
+## Phases and time budget (deadline 11:00, 29 Oct)
+
+| Phase | Output | Owner |
+| --- | --- | --- |
+| 0. Skeleton (~1h) | Dockerfile + trivial valid output; check.sh passes; draft PR opened; both briefs + mock trace.json written | Claude + you |
+| 1. Reader/Linker/Attributor (~4h) | ≥90% of practice facts extracted correctly; the Reader is handed to teammate B as soon as it passes the contract examples | Claude |
+| 2. Truth engine + Judge (~4h, overnight) | Cross-validated label accuracy on practice, tracked per iteration | Claude |
+| 3. Claim forge (parallel from hour 1) | 1,000 claims, 100% passing the validator; switched from the gold KB to the engine KB | Teammate B |
+| 4. Frontend (parallel from hour 1) | Works against mock trace.json first, then the live API | Teammate A |
+| 5. Integration (~03:00–07:00) | End to end: Docker run, check.sh, UI on live engine; video script + pitch outline drafted | Everyone |
+| 6. Sample day (09:00–11:00) | Run on `sample/sample.csv`, record the video, final push before 10:45, never after 11:00 | Everyone |
+
+Parallel work: the frontend (4) is independent once the trace-JSON contract is fixed in Phase 0. The claim forge (3) depends only on the Reader (1). Each can run in its own Claude session.
+
+## Verification
+
+- `pytest tests/`: contract examples, extraction recall against practice `form`, and label accuracy on hidden fifths.
+- `python -m polygraph.run --universe <tmp> --output <tmp>` locally, then `scripts/check_output.py`.
+- `scripts/check.sh` with Docker (we need Docker somewhere; see questions). Also run with `MINUTES=5` to prove the fallback output lands early.
+- Frontend: run `scripts/demo` and load the practice rows. Check that the diagram animates and the evidence board explains a known false row (e.g. p-ids for Jules 8 languages).
