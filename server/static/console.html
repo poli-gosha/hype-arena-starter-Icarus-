@@ -164,7 +164,9 @@
     <div class="actions" style="margin-top:18px">
       <a class="button primary" href="/api/live/output.csv" download="output.csv">Download output.csv</a>
       <span class="note">The exact table the container wrote.</span>
+      <a class="button" href="inside.html" id="insideLink">See inside the machine, sentence by sentence →</a>
     </div>
+    <p class="note" id="traceNote"></p>
 
     <div class="tabs">
       <button class="on" data-tab="rows" id="tabRows">Labelled sentences</button>
@@ -176,7 +178,7 @@
         <button data-f="false">Called false</button><button data-f="sample">Sample rows</button>
         <input id="rowSearch" placeholder="Search sentences">
       </div>
-      <table><thead><tr><th>Sentence</th><th>Our label</th><th>Confidence</th><th>Hidden label</th><th></th></tr></thead>
+      <table><thead><tr><th>Sentence</th><th>Our label</th><th>Confidence</th><th>Hidden label</th><th></th><th></th></tr></thead>
         <tbody id="rowBody"></tbody></table>
       <button class="more" id="rowMore">Show more</button>
     </div>
@@ -207,6 +209,7 @@ const STEP_TEXT = {
   build: "docker build, from the Dockerfile in our repository",
   prepare: "the practice rows with every 5th label hidden, plus the lexicon",
   run: "offline · read-only · user 10001 · 2 CPUs · 6 GB · 30-minute limit",
+  trace: "meanwhile, the same code runs here on the same input and records every stage for each sentence",
   check: "the organisers' checker, then our labels against the hidden ones",
 };
 const pct = x => (x * 100).toFixed(1) + "%";
@@ -270,6 +273,7 @@ function showResults(s) {
       <small>${Object.entries(r.claim_types).map(([k, v]) => `${v} ${k.replace("_", " ")}`).join(" · ")}</small></div>
     <div><b>${Math.round(r.seconds)} s</b><span>container run time</span><small>peak memory ${r.peak_mb} MB of 6,144</small></div>`;
   drawProof(r.proof);
+  $("#traceNote").textContent = r.trace ? `${r.trace.traced} sentences traced in-process on the same input; ${r.trace.same_label} got the same label as the Docker run.` : "";
   const b = $("#checkBadge");
   b.className = "badge " + (r.passed ? "pass" : "fail"); b.textContent = r.passed ? "passed" : "problems found";
   $("#checker").textContent = r.checker;
@@ -311,8 +315,9 @@ function drawRows() {
     <td><span class="pill ${r.label}">${r.label}</span></td>
     <td class="conf">${r.confidence ? Math.round(r.confidence * 100) + "%" : "–"}</td>
     <td>${r.truth ? `<span class="pill ${r.truth}">${r.truth}</span>` : '<span class="note">sample</span>'}</td>
-    <td>${!r.truth ? "" : r.label === r.truth ? '<span class="ok">✓</span>' : '<span class="no">✗</span>'}</td></tr>`).join("")
-    || `<tr><td colspan="5" class="note">No sentences match.</td></tr>`;
+    <td>${!r.truth ? "" : r.label === r.truth ? '<span class="ok">✓</span>' : '<span class="no">✗</span>'}</td>
+    <td>${r.traced ? `<a href="inside.html?row=${encodeURIComponent(r.id)}">Inside ▸</a>` : ""}</td></tr>`).join("")
+    || `<tr><td colspan="6" class="note">No sentences match.</td></tr>`;
   $("#rowMore").style.display = rows.length > rowLimit ? "inline-flex" : "none";
   $("#rowMore").textContent = `Show more (${rows.length - rowLimit} left)`;
 }

@@ -355,7 +355,36 @@ class Attributor:
         if not all_x or self.model is None:
             return out
         p = self.model.predict_proba(np.asarray(all_x, dtype=float))[:, 1]
-        return self._decide(all_c, p, owner, len(items), self.threshold)
+        out = self._decide(all_c, p, owner, len(items), self.threshold)
+        from . import explain
+        if explain.IDS:
+            self._explain(items, all_c, p, owner, out)
+        return out
+
+    def _explain(self, items, cands, p, owner, out):
+        """For explained rows: each value's best candidates with their probabilities."""
+        from . import explain
+        spans: dict = defaultdict(lambda: defaultdict(list))
+        for (reading, s, a), prob, i in zip(cands, p, owner):
+            rid = items[i][0].id
+            if explain.on(rid):
+                key = (reading[1], reading[2]) if reading[0]["kind"] != "boolean" else ("yes/no",)
+                spans[i][key].append((float(prob), s, a, reading[0]))
+        for i, by_span in spans.items():
+            row = items[i][0]
+            listing = []
+            for key, cs in by_span.items():
+                cs.sort(key=lambda c: -c[0])
+                total = sum(c[0] for c in cs[:4]) + 1e-9
+                listing.append({"text": row.text[key[0]:key[1]] if key[0] != "yes/no" else "the whole sentence (yes/no)",
+                                "kind": cs[0][3]["kind"], "considered": len(cs),
+                                "candidates": [{"subject": s, "attribute": a, "value": v, "probability": round(pr, 4),
+                                                "score": round((pr * pr / total) ** 0.5, 4)} for pr, s, a, v in cs[:5]]})
+            th = self.threshold
+            explain.put(row.id, "attributor", {
+                "values": listing, "threshold": th if not isinstance(th, dict) else th.get("*"),
+                "chosen": [{"subject": f.subject, "attribute": f.attribute, "value": f.value, "score": round(f.score, 4)}
+                           for f in out[i]]})
 
     @staticmethod
     def _decide(cands, p, owner, n_items, threshold) -> list[list[Fact]]:

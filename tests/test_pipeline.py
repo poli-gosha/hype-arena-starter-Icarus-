@@ -36,3 +36,14 @@ def test_end_to_end(lexicon, bundle):
     for c in res.claims:
         assert re.fullmatch(r"[A-Za-z0-9_.-]{1,64}", c.id)
         assert not validate(c, lexicon), (c.text, validate(c, lexicon))
+
+
+def test_feature_names_match_the_judge(lexicon):
+    """polygraph/explain.py names every feature judge.row_features builds, in order."""
+    from polygraph import explain, judge, truth
+    from polygraph.model import Row
+    row = Row("x", "Hooly Jules works in 8 languages.", "2026-09-08", "", 0)
+    t = truth.build(lexicon, [row], {})
+    info = {"trust_loo": 0.8, "size": 1, "false_labels": 0, "true_labels": 0, "unsure_labels": 0}
+    x, _, _ = judge.row_features(row, [], t, info)
+    assert len(explain.FEATURES) == len(x) + 3  # + the 3 page features of the second pass

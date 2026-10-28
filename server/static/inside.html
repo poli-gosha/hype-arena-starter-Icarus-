@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Polygraph · Inside the machine</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #F5F5F1; --card: #FFFFFF; --ink: #111214; --soft: #5C6170; --line: #E2E2DC;
+    --lime: #D7F13B; --green: #1E8E4F; --green-bg: #E6F4EC; --red: #C8303F; --red-bg: #FBE9EB;
+    --amber: #A86B00; --amber-bg: #FFF3DA; --blue: #2859B5; --blue-bg: #E8EEFA;
+    --font: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif; --mono: ui-monospace, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.5 var(--font); }
+  a { color: inherit; }
+  header { display: flex; align-items: center; gap: 16px; padding: 16px 28px; border-bottom: 1px solid var(--line); background: var(--card);
+    position: sticky; top: 0; z-index: 10; }
+  header .back { text-decoration: none; color: var(--soft); font-weight: 500; }
+  header .name { font-weight: 800; }
+  header .note { margin-left: auto; color: var(--soft); font-size: 14px; }
+  .layout { display: grid; grid-template-columns: 320px 1fr; gap: 0; min-height: calc(100vh - 58px); }
+  aside { border-right: 1px solid var(--line); background: var(--card); padding: 18px; position: sticky; top: 58px; height: calc(100vh - 58px); overflow: auto; }
+  aside h3 { margin: 0 0 10px; font-size: 14px; text-transform: uppercase; letter-spacing: .06em; color: var(--soft); }
+  .filters { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+  .filters button { font: 500 13px var(--font); padding: 5px 12px; border-radius: 999px; border: 1px solid var(--line); background: none; cursor: pointer; }
+  .filters button.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .item { display: block; width: 100%; text-align: left; border: 1px solid transparent; background: none; padding: 10px; border-radius: 10px;
+    cursor: pointer; font: 14px/1.4 var(--font); color: var(--ink); }
+  .item:hover { background: var(--bg); }
+  .item.on { border-color: var(--ink); background: var(--bg); }
+  .item small { display: block; color: var(--soft); margin-top: 3px; }
+  main { padding: 28px 36px 80px; max-width: 1060px; }
+  .pill { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 13px; font-weight: 600; }
+  .pill.true { background: var(--green-bg); color: var(--green); } .pill.false { background: var(--red-bg); color: var(--red); }
+  .pill.unsure { background: var(--amber-bg); color: var(--amber); }
+  .sentence { font-size: clamp(24px, 2.6vw, 34px); font-weight: 800; line-height: 1.25; letter-spacing: -.01em; margin: 6px 0 8px; }
+  .sub { color: var(--soft); }
+  .match { margin: 14px 0 22px; padding: 12px 16px; border-radius: 10px; background: var(--card); border: 1px solid var(--line); }
+  .match .ok { color: var(--green); font-weight: 700; } .match .no { color: var(--red); font-weight: 700; }
+
+  /* the architecture strip */
+  .strip { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin: 0 0 22px; position: sticky; top: 70px; z-index: 5;
+    background: var(--bg); padding: 8px 0; }
+  .strip div { border: 1px solid var(--line); background: var(--card); border-radius: 8px; padding: 8px 6px; text-align: center; font-size: 13px;
+    font-weight: 600; color: var(--soft); transition: all .35s; cursor: pointer; }
+  .strip div b { display: block; font-size: 11px; color: var(--soft); font-weight: 500; }
+  .strip div.on { border-color: var(--blue); color: var(--ink); box-shadow: inset 0 -3px 0 var(--blue); }
+  .strip div.done { color: var(--ink); }
+
+  .stage { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 22px 24px; margin-bottom: 16px;
+    opacity: .15; transform: translateY(10px); transition: opacity .45s, transform .45s; }
+  .stage.shown { opacity: 1; transform: none; }
+  .stage h2 { margin: 0 0 4px; font-size: 19px; display: flex; gap: 10px; align-items: center; }
+  .stage h2 .n { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--ink); color: #fff; font-size: 13px; }
+  .stage .what { color: var(--soft); margin: 0 0 14px; font-size: 15px; }
+  .hl { font-size: 20px; line-height: 1.6; }
+  mark { padding: 1px 3px; border-radius: 4px; }
+  mark.subj { background: var(--blue-bg); color: var(--blue); font-weight: 600; }
+  mark.val { background: #F1F8C8; color: #4A5A00; font-weight: 600; }
+  table { width: 100%; border-collapse: collapse; font-size: 15px; }
+  th { text-align: left; font-size: 12px; color: var(--soft); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; padding: 6px 8px;
+    border-bottom: 1px solid var(--line); }
+  td { padding: 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tr.self td { background: var(--blue-bg); }
+  .bar { height: 10px; border-radius: 5px; background: var(--line); position: relative; min-width: 120px; }
+  .bar i { position: absolute; inset: 0 auto 0 0; border-radius: 5px; background: var(--soft); }
+  .bar.win i { background: var(--blue); }
+  .chosen { color: var(--green); font-weight: 700; }
+  .box { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-top: 12px; }
+  .box.warn { background: var(--amber-bg); border-color: #F2DDB0; }
+  .fact { margin-bottom: 18px; }
+  .fact h3 { margin: 0 0 6px; font-size: 16px; }
+  .chart svg { width: 100%; height: auto; display: block; border: 1px solid var(--line); border-radius: 10px; background: #FBFBF8; }
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; color: var(--soft); margin-top: 6px; }
+  .legend span::before { content: "●"; margin-right: 5px; }
+  .legend .t::before { color: var(--green); } .legend .f::before { color: var(--red); } .legend .u::before { color: #9AA0AB; }
+  .legend .s::before { color: var(--blue); } .legend .st::before { content: "━"; color: #7FA600; }
+  .probs div { display: grid; grid-template-columns: 80px 1fr 60px; gap: 10px; align-items: center; margin: 6px 0; }
+  .probs .bar { height: 14px; }
+  .rule { font-size: 18px; margin: 14px 0 4px; }
+  .rule b { font-variant-numeric: tabular-nums; }
+  .evidence { display: grid; grid-template-columns: 1fr auto; gap: 4px 16px; font-size: 15px; }
+  .evidence span:nth-child(2n) { font-variant-numeric: tabular-nums; font-weight: 600; text-align: right; }
+  details summary { cursor: pointer; color: var(--soft); margin-top: 12px; }
+  pre, code { font-family: var(--mono); }
+  pre.csv { background: #111214; color: #F5F5F1; padding: 14px 16px; border-radius: 10px; font-size: 15px; overflow: auto; margin: 0; }
+  .controls { display: flex; gap: 10px; margin: 0 0 16px; }
+  .controls button { font: 600 14px var(--font); padding: 8px 16px; border-radius: 999px; border: 1px solid var(--ink); background: var(--card); cursor: pointer; }
+  .empty { color: var(--soft); padding: 40px 0; }
+  @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } aside { position: static; height: auto; max-height: 40vh; }
+    .strip { grid-template-columns: repeat(4, 1fr); } main { padding: 20px; } }
+</style>
+</head>
+<body>
+<header>
+  <a class="back" href="console.html">← Live run</a>
+  <span class="name">Inside the machine</span>
+  <span class="note" id="hdrNote"></span>
+</header>
+<div class="layout">
+  <aside>
+    <h3>Sentences of the last live run</h3>
+    <div class="filters" id="filters"></div>
+    <div id="list"><div class="empty">Loading…</div></div>
+  </aside>
+  <main id="main"><div class="empty">Pick a sentence on the left. If the list is empty, run the live check first.</div></main>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const STAGES = [["Input", "the page"], ["Linker", "who"], ["Reader", "which values"], ["Attributor", "which fact"],
+  ["Truth engine", "the timeline"], ["Judge", "the verdict"], ["Writer", "output.csv"]];
+const STATUS = { agrees: "holds on this date", stale: "was true before this date, but not on it", premature: "only becomes true after this date",
+  invented: "is never true on this timeline", unknown: "has no other evidence to compare with", none: "no fact found" };
+let INDEX = [], FILTER = "all", CURRENT = null, timers = [];
+
+function val(v) {
+  if (!v) return "";
+  const n = x => typeof x === "number" ? x.toLocaleString("en-US") : x, cur = { EUR: "€", USD: "$", GBP: "£" };
+  const op = v.op && v.op !== "eq" ? ({ gt: "over ", lt: "under ", ge: "at least ", le: "up to " }[v.op] || "") : "";
+  const big = x => x >= 1e9 && Number.isInteger(x / 1e7) ? `${x / 1e9} billion` : x >= 1e6 && Number.isInteger(x / 1e4) ? `${x / 1e6} million` : n(x);
+  if (v.kind === "money") return `${op}${cur[v.currency] || v.currency + " "}${big(v.value)}${v.per ? " per " + v.per : ""}`;
+  if (v.kind === "quantity" || v.kind === "duration") return `${op}${n(v.value)} ${v.unit}`;
+  if (v.kind === "percent") return `${op}${n(v.value)}%`;
+  if (v.kind === "boolean") return v.value ? "yes" : "no";
+  if (v.kind === "version") return `version ${v.value}`;
+  return `${op}${v.value}`;
+}
+const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+/* ---- the list ----------------------------------------------------------------------- */
+async function loadIndex() {
+  const j = await (await fetch("/api/trace/index")).json();
+  INDEX = j.rows.filter(r => r.traced);
+  const hasSample = INDEX.some(r => r.sample);
+  const filters = [...(hasSample ? [["sample", "Sample"]] : []), ["false", "Called false"], ["wrong", "Wrong"], ["all", "All"]];
+  FILTER = hasSample ? "sample" : "false";
+  $("#filters").innerHTML = filters.map(([k, n]) => `<button data-f="${k}" class="${k === FILTER ? "on" : ""}">${n}</button>`).join("");
+  $("#filters").querySelectorAll("button").forEach(b => b.onclick = () => {
+    FILTER = b.dataset.f; $("#filters").querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b)); drawList(); });
+  if (j.trace) $("#hdrNote").textContent = `${j.trace.traced} sentences traced · ${j.trace.same_label} with the same label as the Docker run`;
+  drawList();
+  const want = new URLSearchParams(location.search).get("row");
+  const first = INDEX.find(r => r.id === want) || listRows()[0];
+  if (first) open(first.id); else if (!INDEX.length) $("#list").innerHTML = '<div class="empty">No traces yet. Run the live check (← Live run).</div>';
+}
+function listRows() {
+  return INDEX.filter(r => FILTER === "all" || (FILTER === "sample" && r.sample) || (FILTER === "false" && r.label === "false")
+    || (FILTER === "wrong" && r.truth && r.truth !== r.label));
+}
+function drawList() {
+  $("#list").innerHTML = listRows().map(r => `<button class="item ${r.id === CURRENT ? "on" : ""}" data-id="${esc(r.id)}">
+    <span class="pill ${r.label}">${r.label}</span> ${esc(r.text.length > 90 ? r.text.slice(0, 88) + "…" : r.text)}
+    <small>${esc(r.id)} · ${esc(r.date)}${r.truth ? ` · hidden label: ${r.truth}` : ""}</small></button>`).join("") || '<div class="empty">None.</div>';
+  $("#list").querySelectorAll(".item").forEach(b => b.onclick = () => open(b.dataset.id));
+}
+
+/* ---- one row ------------------------------------------------------------------------- */
+async function open(id) {
+  CURRENT = id; drawList();
+  history.replaceState(null, "", `?row=${encodeURIComponent(id)}`);
+  const j = await (await fetch(`/api/trace/row/${encodeURIComponent(id)}`)).json();
+  render(j.trace, j.docker, j.feature_names);
+}
+
+function highlight(text, spans, cls) {
+  const ok = spans.filter(s => s.start >= 0).sort((a, b) => a.start - b.start);
+  let out = "", at = 0;
+  for (const s of ok) {
+    if (s.start < at) continue;
+    out += esc(text.slice(at, s.start)) + `<mark class="${cls}">${esc(text.slice(s.start, s.end))}</mark>`;
+    at = s.end;
+  }
+  return out + esc(text.slice(at));
+}
+
+function timeline(f, day) {
+  const W = 900, H = 230, L = 130, R = 20, T = 18, B = 34;
+  const t0 = Date.parse("2025-10-01"), t1 = Date.parse("2026-11-01");
+  const X = d => L + (W - L - R) * (Date.parse(d.length === 7 ? d + "-15" : d.length === 4 ? d + "-07-01" : d) - t0) / (t1 - t0);
+  const vals = [];  // one lane per distinct value
+  [...f.steps.map(s => s.value), ...f.mentions.map(m => m.value), f.value].forEach(v => { if (!vals.includes(val(v))) vals.push(val(v)); });
+  const Y = v => T + (H - T - B) * (vals.length === 1 ? 0.5 : vals.indexOf(val(v)) / (vals.length - 1));
+  let s = `<svg viewBox="0 0 ${W} ${H}">`;
+  for (let m = 0; m <= 13; m++) {
+    const d = new Date(Date.UTC(2025, 9 + m, 1)), x = X(d.toISOString().slice(0, 10));
+    s += `<line x1="${x}" y1="${T - 8}" x2="${x}" y2="${H - B + 4}" stroke="#EEEEE8"/>`;
+    if (m % 2 === 0) s += `<text x="${x}" y="${H - 12}" fill="#8A8F99" font-size="12" text-anchor="middle">${d.toLocaleString("en", { month: "short", timeZone: "UTC" })} ${String(d.getUTCFullYear()).slice(2)}</text>`;
+  }
+  vals.forEach((v, i) => s += `<text x="${L - 10}" y="${T + (H - T - B) * (vals.length === 1 ? 0.5 : i / (vals.length - 1)) + 4}" fill="#5C6170" font-size="13" text-anchor="end">${esc(v.slice(0, 18))}</text>`);
+  f.steps.forEach((st, i) => {   // the staircase the truth engine fitted
+    const x0 = X(st.from), nx = f.steps[i + 1], x1 = nx ? X(nx.from) : X(st.to) + 6, y = Y(st.value);
+    s += `<line x1="${x0}" y1="${y}" x2="${x1}" y2="${y}" stroke="#9BC400" stroke-width="5" stroke-linecap="round" opacity=".75"/>`;
+    if (nx) s += `<line x1="${x1}" y1="${y}" x2="${x1}" y2="${Y(nx.value)}" stroke="#9BC400" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>`;
+  });
+  f.mentions.forEach(m => {
+    if (m.this) return;
+    const c = m.anchor >= 1 ? "#1E8E4F" : m.anchor <= -1 ? "#C8303F" : "#9AA0AB";
+    const r = m.anchor ? 5.5 : 3 + Math.min(3, m.weight * 3);
+    s += `<circle cx="${X(m.date)}" cy="${Y(m.value)}" r="${r}" fill="${c}" fill-opacity="${Math.abs(m.anchor) >= 1 ? 0.9 : 0.55}"/>`;
+  });
+  s += `<line x1="${X(day)}" y1="${T - 8}" x2="${X(day)}" y2="${H - B + 4}" stroke="#2859B5" stroke-dasharray="3 4"/>
+        <circle cx="${X(day)}" cy="${Y(f.value)}" r="9" fill="none" stroke="#2859B5" stroke-width="3"/>`;
+  return s + "</svg>";
+}
+
+function render(t, docker, names) {
+  timers.forEach(clearTimeout); timers = [];
+  const row = t.row, v = t.verdict, judge = t.judge || {}, att = t.attributor;
+  const features = t.features || [], pagef = t.page_features || [];
+  const linkerIn = (t.linker || []).filter(m => m.in_sentence), linkerPage = (t.linker || []).filter(m => !m.in_sentence);
+  const match = docker && docker.label === v.label;
+  const evid = n => { const f = features.find(x => x.name === n); return f ? f.value : null; };
+  const unlog = x => x == null ? "–" : Math.round(Math.exp(x) - 1);
+  const pf = judge.p_false_given_decided;
+
+  const stages = [];
+  // 1 input
+  stages.push(`<p class="what">The sentence and the page it was published on. Sentences on one page are judged together: lies cluster.</p>
+    <table><thead><tr><th>On the same page</th><th>Label in the input</th></tr></thead><tbody>
+    ${(t.page || []).map(p => `<tr class="${p.self ? "self" : ""}"><td>${esc(p.text)}</td><td>${p.self ? "<b>this sentence</b>" : p.label ? `<span class="pill ${p.label}">${p.label}</span>` : '<span class="sub">to be labelled</span>'}</td></tr>`).join("")}
+    </tbody></table>`);
+  // 2 linker
+  stages.push(`<p class="what">Finds who the sentence is about, from Hooly's own list of names (the lexicon). Subjects named elsewhere on the page are candidates too.</p>
+    <div class="hl">${highlight(row.text, linkerIn, "subj")}</div>
+    <div class="box">${linkerIn.length ? `Named in the sentence: ${linkerIn.map(m => `<b>${esc(m.subject)}</b>`).join(", ")}` : "No subject named in the sentence itself."}
+    ${linkerPage.length ? `<br><span class="sub">Named elsewhere on the page: ${linkerPage.map(m => `${esc(m.subject)} (${m.row_gap} sentence${m.row_gap === 1 ? "" : "s"} away)`).join(", ")}</span>` : ""}</div>`);
+  // 3 reader
+  const rd = t.reader || [];
+  stages.push(`<p class="what">Reads every value exactly as the organisers' published rules do: money, counts, dates, versions, durations, percentages.</p>
+    <div class="hl">${highlight(row.text, rd, "val")}</div>
+    ${rd.length ? `<table style="margin-top:12px"><thead><tr><th>Written</th><th>Read as</th><th>Kind</th></tr></thead><tbody>
+      ${rd.map(r => `<tr><td>“${esc(r.text)}”</td><td><b>${esc(val(r.value))}</b>${r.negated ? ' <span class="pill false">negated: ignored</span>' : ""}
+        ${r.alts && r.alts.length ? `<br><span class="sub">also possible: ${r.alts.map(a => esc(val(a))).join(", ")}</span>` : ""}</td><td>${esc(r.value.kind)}</td></tr>`).join("")}
+      </tbody></table>` : '<div class="box">No number, date or price in this sentence. Yes/no facts and names are found by the next stage.</div>'}`);
+  // 4 attributor
+  const real = att ? att.values.filter(a => a.kind !== "boolean" || a.candidates.some(c => c.probability >= 0.01)) : [];
+  const quietYesNo = att ? att.values.find(a => a.kind === "boolean" && !real.includes(a)) : null;
+  stages.push(`<p class="what">A model trained on 2,400 labelled facts gives every (subject, attribute) a value could belong to a probability.
+    The score that decides is that probability tempered by close rivals (four equal rivals halve it). The best score is kept if it is above ${att ? att.threshold : "the threshold"}; on an exact tie the first one listed wins, and the next stage can still correct it.</p>
+    ${att ? real.map(a => `<div class="box"><b>“${esc(a.text)}”</b> <span class="sub">· ${a.considered} candidate facts scored</span>
+      <table style="margin-top:8px"><thead><tr><th>Candidate fact</th><th>Probability</th><th></th><th style="text-align:right">Score</th></tr></thead><tbody>${a.candidates.map((c, i) => {
+        const won = att.chosen.some(ch => ch.subject === c.subject && ch.attribute === c.attribute && same(ch.value, c.value));
+        return `<tr><td style="width:46%">${won ? '<span class="chosen">✓ </span>' : ""}${esc(c.subject)} · ${esc(c.attribute.replace(/_/g, " "))}
+          ${c.value.kind === "boolean" ? ` = ${val(c.value)}` : ""}</td>
+          <td><div class="bar ${won ? "win" : ""}"><i style="width:${Math.max(1, c.probability * 100)}%"></i></div></td>
+          <td style="width:70px;text-align:right">${(c.probability * 100).toFixed(1)}%</td>
+          <td style="width:70px;text-align:right">${c.score.toFixed(3)}</td></tr>`; }).join("")}</tbody></table></div>`).join("")
+      + (quietYesNo ? `<div class="box sub">Read as a yes/no statement: ${quietYesNo.considered} yes/no facts checked, none above 1%.</div>` : "")
+      : '<div class="box">This sentence is labelled in the input, so its facts come straight from the practice data.</div>'}
+    ${(t.reconcile || []).length ? `<div class="box warn"><b>Corrected by the knowledge base.</b> ${t.reconcile.map(n => n.was
+      ? `${esc(n.was.subject)} · ${esc(n.was.attribute.replace(/_/g, " "))} → <b>${esc(n.now.subject)} · ${esc(n.now.attribute.replace(/_/g, " "))}</b>`
+      : `added <b>${esc(n.now.subject)} · ${esc(n.now.attribute.replace(/_/g, " "))} = ${esc(val(n.now.value))}</b>`).join("; ")}:
+      the value matches exactly what that fact holds on this date.</div>` : ""}
+    <div class="box"><b>Facts used:</b> ${(t.truth && t.truth.facts.length) ? t.truth.facts.map(f => `${esc(f.subject)} · ${esc(f.attribute.replace(/_/g, " "))} = <b>${esc(val(f.value))}</b>`).join("; ") : "none"}</div>`);
+  // 5 truth engine
+  const facts = (t.truth && t.truth.facts) || [];
+  stages.push(`<p class="what">Every other sentence that mentions the same fact lands on its timeline. The engine fits the most likely staircase: a lone wrong value is outvoted, and a real change repeated by later pages becomes a new step. Pages earn trust as it goes.</p>
+    ${facts.length ? facts.map(f => `<div class="fact"><h3>${esc(f.subject)} · ${esc(f.attribute.replace(/_/g, " "))}</h3>
+      <div class="chart">${timeline(f, row.date)}</div>
+      <div class="legend"><span class="st">fitted timeline</span><span class="t">labelled true</span><span class="f">labelled false</span><span class="u">other sentences (size = trust)</span><span class="s">this sentence</span></div>
+      <div class="box">This sentence says <b>${esc(val(f.value))}</b> on ${esc(row.date)}${f.held_on_date ? `; the timeline holds <b>${esc(val(f.held_on_date))}</b> on that date` : ""}.
+        The value <b>${STATUS[f.status] || f.status}</b>. <span class="sub">${f.mention_count} mentions of this fact · this page's trust ${f.page_trust}</span></div></div>`).join("")
+      : '<div class="box">No fact to place on a timeline: the judge decides from the page and the wording alone.</div>'}`);
+  // 6 judge
+  const lines = [
+    ["Worst fact's status", STATUS[t.truth ? t.truth.worst : "none"] || "–"],
+    ["Other mentions of that fact", unlog(evid("other mentions of the worst fact (log)"))],
+    ["…with the same value within 30 days", unlog(evid("mentions with the same value within 30 days (log)"))],
+    ["…with a different value within 30 days", unlog(evid("mentions with a different value within 30 days (log)"))],
+    ["Confirmed-true rows with the same value", evid("confirmed-true rows with the same value")],
+    ["Confirmed-true rows nearby with another value", evid("confirmed-true rows nearby with a different value")],
+    ["Newer values since this one was last seen", evid("newer values since this one was last seen (weight)")],
+    ["Trust of the rest of the page", evid("trust of the rest of the page")],
+    ["Hedging words (\"I have been told\")", evid("hedging words (\"I have been told\")") ? "yes" : "no"],
+    ["Speaker is Gavin", evid("the speaker is Gavin") ? "yes" : "no"],
+    ["Other sentences on this page the first pass called false", !pagef.length ? "–" : pagef[1] < 0 ? "no other sentences"
+      : `${pagef[2]} (highest P(false) ${Math.round(pagef[1] * 100)}%)`],
+  ];
+  const cls = judge.classes || [], probs = judge.probabilities || [];
+  stages.push(`<p class="what">A forest of decision trees, trained on the labelled rows, reads ${names.length} numbers about this sentence. Here are the ones that matter most:</p>
+    <div class="evidence">${lines.map(([a, b]) => `<span>${esc(a)}</span><span>${esc(b ?? "–")}</span>`).join("")}</div>
+    <h3 style="margin:18px 0 6px;font-size:16px">What the trees say</h3>
+    <div class="probs">${["true", "false", "unsure"].map(c => { const i = cls.indexOf(c), p = i >= 0 ? probs[i] : 0;
+      return `<div><span class="pill ${c}">${c}</span><div class="bar"><i style="width:${p * 100}%;background:var(--${c === "true" ? "green" : c === "false" ? "red" : "amber"})"></i></div><span>${(p * 100).toFixed(1)}%</span></div>`; }).join("")}</div>
+    <div class="rule">${v.label === "unsure" ? `<b>unsure</b> is the most likely class, so the answer is <span class="pill unsure">unsure</span>`
+      : `P(false), among true or false = <b>${(pf * 100).toFixed(1)}%</b> ${pf > judge.cutoff ? ">" : "≤"} ${judge.cutoff * 100}% → <span class="pill ${v.label}">${v.label}</span>, ${Math.round(v.confidence * 100)}% sure`}</div>
+    <div class="sub">${esc(v.why)}${judge.self_training ? ` · Self-training: in the first pass this sentence scored P(false) ${(judge.first_pass_p_false * 100).toFixed(0)}%; other sentences' confident verdicts were then added to the timelines as weak evidence, and everything was judged again.` : ""}</div>
+    <details><summary>All ${names.length} numbers the trees read</summary><table style="margin-top:8px"><tbody>
+      ${[...features, ...pagef.map((x, i) => ({ name: names[features.length + i], value: x }))].map(f => `<tr><td>${esc(f.name)}</td><td style="text-align:right">${esc(f.value)}</td></tr>`).join("")}
+    </tbody></table></details>`);
+  // 7 writer
+  stages.push(`<p class="what">The row this sentence gets in <code>output.csv</code>: id, four empty claim columns, the label and the confidence.</p>
+    <pre class="csv">id,type,text,form,label,confidence\n${esc(v.csv)}</pre>
+    ${docker ? `<div class="box">The Docker container wrote: <span class="pill ${docker.label}">${docker.label}</span>${docker.confidence ? ` ${Math.round(docker.confidence * 100)}%` : ""}
+      ${match ? ' <span class="chosen">✓ same as this trace</span>' : ' <span style="color:var(--red);font-weight:700">differs from this trace</span>'}
+      ${docker.truth ? ` · hidden practice label: <span class="pill ${docker.truth}">${docker.truth}</span> ${docker.truth === docker.label ? '<span class="chosen">✓ correct</span>' : '<span style="color:var(--red);font-weight:700">✗ wrong</span>'}` : ""}</div>` : ""}`);
+
+  $("#main").innerHTML = `
+    <div class="sub">${esc(row.id)} · page dated ${esc(row.date)}</div>
+    <div class="sentence">${esc(row.text)}</div>
+    <div class="match">Verdict: <span class="pill ${v.label}">${v.label}</span>${v.confidence ? ` ${Math.round(v.confidence * 100)}% sure` : ""}
+      ${docker ? ` · Docker run: <span class="pill ${docker.label}">${docker.label}</span> ${match ? '<span class="ok">✓ same</span>' : '<span class="no">differs</span>'}` : ""}
+      ${docker && docker.truth ? ` · hidden label: <span class="pill ${docker.truth}">${docker.truth}</span>` : ""}</div>
+    <div class="controls"><button id="replay">▶ Replay the run</button><button id="showAll">Show all stages</button></div>
+    <div class="strip">${STAGES.map(([a, b], i) => `<div data-i="${i}">${a}<b>${b}</b></div>`).join("")}</div>
+    ${stages.map((html, i) => `<section class="stage" id="st${i}"><h2><span class="n">${i + 1}</span>${STAGES[i][0]}</h2>${html}</section>`).join("")}`;
+  document.querySelectorAll(".strip div").forEach(d => d.onclick = () => $(`#st${d.dataset.i}`).scrollIntoView({ behavior: "smooth", block: "start" }));
+  $("#replay").onclick = () => play();
+  $("#showAll").onclick = () => { timers.forEach(clearTimeout); document.querySelectorAll(".stage").forEach(s => s.classList.add("shown"));
+    document.querySelectorAll(".strip div").forEach(d => { d.classList.remove("on"); d.classList.add("done"); }); };
+  play();
+}
+
+function play() {
+  // the stages light up in order, as the row flows through the pipeline
+  timers.forEach(clearTimeout); timers = [];
+  const st = [...document.querySelectorAll(".stage")], strip = [...document.querySelectorAll(".strip div")];
+  st.forEach(s => s.classList.remove("shown")); strip.forEach(d => d.classList.remove("on", "done"));
+  st.forEach((s, i) => timers.push(setTimeout(() => {
+    s.classList.add("shown");
+    strip.forEach((d, j) => { d.classList.toggle("on", j === i); d.classList.toggle("done", j < i); });
+    if (i === st.length - 1) timers.push(setTimeout(() => strip.forEach(d => { d.classList.remove("on"); d.classList.add("done"); }), 900));
+  }, 250 + i * 750)));
+}
+
+loadIndex();
+</script>
+</body>
+</html>

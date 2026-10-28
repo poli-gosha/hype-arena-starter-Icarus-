@@ -31,7 +31,7 @@ ROOT = Path(__file__).resolve().parent.parent
 RUN = ROOT / "out" / "live"
 IMAGE = "polygraph-live"
 STEPS = [("build", "Build the Docker image"), ("prepare", "Prepare the input"),
-         ("run", "Run the container"), ("check", "Check the output")]
+         ("run", "Run the container"), ("trace", "Trace every sentence"), ("check", "Check the output")]
 
 
 def docker_exe() -> str | None:
@@ -45,6 +45,12 @@ class Job:
     def __init__(self):
         self.lock = threading.Lock()
         self.reset()
+        self.trace = {}
+        if (RUN / "trace.json").exists():
+            try:
+                self.trace = json.loads((RUN / "trace.json").read_text(encoding="utf-8"))
+            except ValueError:
+                pass
         saved = RUN / "result.json"
         if saved.exists():  # the last finished run survives a server restart
             try:
@@ -60,6 +66,8 @@ class Job:
         self.log: list[str] = []
         self.error = None
         self.result = None
+        self.trace = {}
+        self.trace_error = None
         self.started = None
         self.peak_mb = 0.0
         self.container = None
@@ -87,7 +95,19 @@ class Job:
         threading.Thread(target=self._run, args=(with_sample,), daemon=True).start()
         return True
 
-    # ---- the four steps --------------------------------------------------------------------
+    def _trace(self, uni: Path):
+        t = time.time()
+        self._step("trace", "running")
+        try:
+            self.trace = _trace_run(self, uni)
+            (RUN / "trace.json").write_text(json.dumps(self.trace), encoding="utf-8")
+            self._step("trace", "done", time.time() - t)
+        except Exception as e:  # noqa: BLE001 - the Docker run stands on its own; the trace is extra
+            self.trace_error = str(e)
+            self.say("trace failed: " + str(e))
+            self._step("trace", "failed")
+
+    # ---- the steps -------------------------------------------------------------------------
     def _step(self, sid: str, status: str, seconds=None):
         for s in self.steps:
             if s["id"] == sid:
@@ -140,6 +160,10 @@ class Job:
                         w.writerow([row["id"], row["text"], row["date"], ""]); n += 1
                 self.say(f"added {n} sample rows (sample/sample.csv)")
             self._step("prepare", "done", time.time() - t)
+            # while the container runs, the same code runs here on the same input and records
+            # what every stage computed for each sentence it labels
+            tracer = threading.Thread(target=self._trace, args=(uni,), daemon=True)
+            tracer.start()
 
             current = "run"
             t = time.time(); self._step("run", "running")
@@ -199,6 +223,7 @@ class Job:
                 raise RuntimeError("The container wrote no /output/output.csv.")
             self._step("run", "done", run_seconds)
 
+            tracer.join()
             current = "check"
             t = time.time(); self._step("check", "running")
             chk = subprocess.run([sys.executable, str(ROOT / "scripts" / "check_output.py"), str(out),
@@ -209,6 +234,13 @@ class Job:
             self.result = _score(uni / "universe.csv", out / "output.csv", chk.stdout, chk.returncode == 0,
                                  run_seconds, self.peak_mb, with_sample)
             self.result["proof"] = {"image": self.image, "container": self.container}
+            docker_labels = {r["id"]: r["label"] for r in self.result["rows"]}
+            traced = {rid: t["verdict"]["label"] for rid, t in self.trace.items() if "verdict" in t}
+            same = sum(docker_labels.get(rid) == lab for rid, lab in traced.items())
+            self.result["trace"] = {"traced": len(traced), "same_label": same, "error": self.trace_error}
+            for r in self.result["rows"]:
+                r["traced"] = r["id"] in traced
+            self.say(f"trace: {len(traced)} sentences traced, {same} with the same label as the container")
             (RUN / "result.json").write_text(json.dumps(self.result), encoding="utf-8")
             self._step("check", "done", time.time() - t)
             self.state = "done"
@@ -217,6 +249,20 @@ class Job:
             self.error = str(e) if not isinstance(e, subprocess.CalledProcessError) else (e.stderr or str(e))
             self.say("ERROR: " + str(self.error))
             self.state = "failed"
+
+
+def _trace_run(job: "Job", uni: Path):
+    """The in-process trace (see Job._trace)."""
+    from polygraph import explain, pipeline
+    rows, lexicon = pipeline.load_universe(uni)
+    bundle = pipeline.Bundle.load()
+    with explain.LOCK:
+        explain.start([r.id for r in rows if not r.label])
+        try:
+            pipeline.run(rows, lexicon, bundle, claims=False)
+            return dict(explain.ROWS)
+        finally:
+            explain.stop()
 
 
 def _mib(usage: str) -> float:

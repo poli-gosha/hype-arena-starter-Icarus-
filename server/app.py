@@ -125,7 +125,9 @@ def run(req: RunRequest):
         if i and r.date != req.rows[i - 1].date:
             page += 1
         new.append(Row(r.id, r.text, r.date, "", page))
-    res = pipeline.run(base + new, lexicon, bundle, claims=req.include_claims, warm=WARM)
+    from polygraph import explain
+    with explain.LOCK:  # never while a trace is recording
+        res = pipeline.run(base + new, lexicon, bundle, claims=req.include_claims, warm=WARM)
     trace = to_trace(new, res)
     return trace
 
@@ -170,6 +172,25 @@ def live_status(full: bool = False):
     elif JOB.result:
         s["result"] = {k: v for k, v in JOB.result.items() if k not in ("rows", "claims")}
     return s
+
+
+@app.get("/api/trace/index")
+def trace_index():
+    """The sentences of the last live run, with whether each has a trace."""
+    if not JOB.result:
+        return {"rows": [], "note": "run the live check first"}
+    return {"rows": [{k: r.get(k) for k in ("id", "text", "date", "label", "confidence", "truth", "sample", "traced")}
+                     for r in JOB.result["rows"]], "trace": JOB.result.get("trace")}
+
+
+@app.get("/api/trace/row/{row_id}")
+def trace_row(row_id: str):
+    t = JOB.trace.get(row_id)
+    if t is None:
+        raise HTTPException(404, "no trace for this sentence")
+    docker = next((r for r in JOB.result["rows"] if r["id"] == row_id), None) if JOB.result else None
+    from polygraph import explain
+    return {"trace": t, "docker": docker, "feature_names": explain.FEATURES}
 
 
 @app.get("/api/live/output.csv")

@@ -28,6 +28,7 @@ import numpy as np
 
 from . import truth as truth_mod
 from .lexicon import Lexicon
+from . import explain
 from .model import Fact, Row, Verdict, value_key
 
 FOLDS = 5
@@ -262,7 +263,35 @@ def row_features(r: Row, fs: list[Fact], t: truth_mod.Truth, page_info: dict) ->
         wi["superseded"], wi["superseded_anchor"], wi["not_yet"], wi["not_yet_anchor"],
         wi["diff_before_any"], wi["diff_after_any"], wi["bracketed"],
     ]
+    if explain.on(r.id):
+        _explain_truth(r, fs, t, page_info, x, details, worst)
     return x, details, worst
+
+
+def _explain_truth(r, fs, t, page_info, x, details, worst):
+    """For an explained row: each fact's timeline as the truth engine fitted it, and the
+    features the judge reads."""
+    import json as _json
+    facts = []
+    for f, d in zip(fs, details):
+        key = (f.subject, f.attribute)
+        ms = sorted(t.mentions.get(key, []), key=lambda m: m.date)
+        od = t.on_date.get(key, {})
+        steps = []
+        for day in sorted(od):
+            v = _json.loads(od[day])
+            if steps and steps[-1]["value"] == v:
+                steps[-1]["to"] = day
+            else:
+                steps.append({"from": day, "to": day, "value": v})
+        facts.append({**d, "page_trust": round(t.page_trust.get(r.page, 0), 3), "steps": steps,
+                      "held_on_date": _json.loads(od[r.date]) if r.date in od else None,
+                      "mentions": [{"date": m.date, "value": m.value, "row": m.row, "this": m.row == r.id,
+                                    "weight": round(m.weight, 3), "anchor": m.anchor} for m in ms[:400]],
+                      "mention_count": len(ms)})
+    explain.put(r.id, "truth", {"facts": facts, "worst": worst, "page": page_info})
+    explain.put(r.id, "features", [{"name": n, "value": round(v, 4) if isinstance(v, float) else v}
+                                   for n, v in zip(explain.FEATURES, x)])
 
 
 def _page_info(rows: list[Row], t: truth_mod.Truth, facts: dict[str, list[Fact]], hide: set[str]) -> dict[str, dict]:
@@ -317,6 +346,7 @@ def reconcile(rows: list[Row], facts: dict[str, list[Fact]], t: truth_mod.Truth,
         if r.id not in targets or r.id not in ctx["readings"]:
             continue
         fs = list(facts.get(r.id, []))
+        notes = []
         subjects = set(ctx["subjects"].get(r.id, ()))
         for v, start, end in ctx["readings"][r.id]:
             k = value_key({kk: vv for kk, vv in v.items() if kk != "op"})
@@ -344,10 +374,14 @@ def reconcile(rows: list[Row], facts: dict[str, list[Fact]], t: truth_mod.Truth,
                 if st_old is not None and value_key(st_old.value) == value_key(old.value):
                     continue  # the attributor's choice already agrees
                 fs[i] = new
+                notes.append({"was": {"subject": old.subject, "attribute": old.attribute, "value": old.value},
+                              "now": {"subject": s, "attribute": a, "value": v}})
             else:
                 fs.append(new)
+                notes.append({"was": None, "now": {"subject": s, "attribute": a, "value": v}})
             changed += 1
         out[r.id] = fs
+        explain.put(r.id, "reconcile", notes)
     return out, changed
 
 
@@ -376,6 +410,7 @@ def label(rows: list[Row], facts: dict[str, list[Fact]], lexicon: Lexicon,
     unlabelled = [r for r in rows if not r.label]
     extracted = extracted or {}
     proba, classes, feats, t, pu = _fit_predict(rows, facts, lexicon, extracted, ctx, labelled, unlabelled)
+    pu_first = dict(pu)
     if SELF_TRAIN and unlabelled and len(classes) > 1:
         # self-training: confident first-pass verdicts become weak anchors for OTHER rows,
         # and everything is judged again (a row never sees its own guess)
@@ -387,6 +422,12 @@ def label(rows: list[Row], facts: dict[str, list[Fact]], lexicon: Lexicon,
     out = []
     for r, p in zip(unlabelled, proba):
         x, details, worst = feats[r.id]
+        if explain.on(r.id):
+            pt, pf = (p[classes.index("true")] if "true" in classes else 0), (p[classes.index("false")] if "false" in classes else 0)
+            explain.put(r.id, "judge", {"classes": classes, "probabilities": [round(float(q), 4) for q in p],
+                                        "p_false_given_decided": round(float(pf / max(1e-9, pt + pf)), 4),
+                                        "cutoff": FALSE_CUTOFF, "self_training": SELF_TRAIN,
+                                        "first_pass_p_false": round(float(pu_first.get(r.id, -1)), 4)})
         PROBA[r.id] = dict(zip(classes, map(float, p)))
         i = int(np.argmax(p))
         lab = classes[i]
@@ -460,6 +501,10 @@ def _fit_predict(rows, facts, lexicon, extracted, ctx, labelled, unlabelled, sof
             Xu = np.hstack([Xu, _page_scores([r.id for r in unlabelled], page_of, score)])
         model = _model().fit(X, y)
         proba = model.predict_proba(Xu)
+        if explain.IDS:
+            for r, xu in zip(unlabelled, Xu):
+                if explain.on(r.id) and len(xu) > len(feats[r.id][0]):
+                    explain.put(r.id, "page_features", [round(float(v), 4) for v in xu[len(feats[r.id][0]):]])
         classes = list(model.classes_)
         pu = dict(zip([r.id for r in unlabelled], _pfalse(model, Xu)))
     else:

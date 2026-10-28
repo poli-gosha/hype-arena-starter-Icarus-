@@ -8,7 +8,7 @@ from itertools import groupby
 from pathlib import Path
 
 from . import attributor as attributor_mod
-from . import forge, judge, reader, truth
+from . import explain, forge, judge, reader, truth
 from .kb import KB
 from .lexicon import Lexicon
 from .linker import Linker
@@ -68,6 +68,8 @@ def run(rows: list[Row], lexicon: Lexicon, bundle: Bundle, *, claims: bool = Tru
     values = {r.id: reader.parse_values(r.text, [(m.start, m.end) for m in mentions[r.id] if m.start >= 0])
               for r in rows}
     stage("reader", t, sum(map(len, values.values())))
+    if explain.IDS:
+        _explain_reading(rows, mentions, values)
 
     if cache and Path(cache).exists():
         import pickle
@@ -104,7 +106,33 @@ def run(rows: list[Row], lexicon: Lexicon, bundle: Bundle, *, claims: bool = Tru
     out_claims = forge.generate(kb, {normalize_text(r.text) for r in rows}) if claims else []
     stages.append({"name": "forge", "ms": round((time.perf_counter() - t) * 1000, 1), "count": len(out_claims)})
 
+    if explain.IDS:
+        from .tables import _conf
+        for v in verdicts:
+            explain.put(v.id, "verdict", {"label": v.label, "confidence": v.confidence, "why": v.why,
+                                          "csv": f"{v.id},,,,{v.label},{'' if v.label == 'unsure' else _conf(v.confidence)}"})
     return Result(verdicts, out_claims, kb, facts, stages)
+
+
+def _explain_reading(rows, mentions, values):
+    """Linker and reader output, and the page around the row, for explained rows."""
+    by_page: dict = {}
+    for r in rows:
+        by_page.setdefault(r.page, []).append(r)
+    for r in rows:
+        if not explain.on(r.id):
+            continue
+        explain.put(r.id, "row", {"id": r.id, "text": r.text, "date": r.date, "page": r.page})
+        page = by_page[r.page]
+        at = next(i for i, p in enumerate(page) if p.id == r.id)
+        lo = max(0, min(at - 6, len(page) - 12))  # up to 12 sentences around this one
+        explain.put(r.id, "page", [{"id": p.id, "text": p.text, "label": p.label or None, "self": p.id == r.id}
+                                   for p in page[lo:lo + 12]])
+        explain.put(r.id, "linker", [{"subject": m.subject, "start": m.start, "end": m.end, "written": m.written,
+                                      "in_sentence": m.start >= 0, "row_gap": m.row_gap, "page_count": m.page_count}
+                                     for m in mentions[r.id]])
+        explain.put(r.id, "reader", [{"value": v.value, "start": v.start, "end": v.end, "text": r.text[v.start:v.end],
+                                      "negated": v.negated, "alts": v.alts} for v in values[r.id]])
 
 
 def _extract(rows, lexicon, bundle, gold_extraction, linker, mentions, values, warm=None):
