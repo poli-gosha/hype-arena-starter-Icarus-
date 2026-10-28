@@ -17,6 +17,7 @@ from . import AS_OF
 from .kb import KB
 from .model import Claim, Step
 from .render import attribute_words, render
+from . import wording
 from .validate import has_time_word, normalize_text, validate
 
 N_CLAIMS = 1000
@@ -196,6 +197,28 @@ def relation_claims(kb: KB) -> Iterator[Claim]:
                                 [{"subject": subj, "attribute": link}, {"subject": target, "attribute": attr}])
 
 
+def _options(c: Claim, kb: KB) -> list[str]:
+    """Natural wordings for a claim, most natural first (polygraph/wording.py)."""
+    f = c.form
+    try:
+        if c.type == "fact":
+            return wording.fact(f["subject"], f["attribute"], f["value"])
+        if c.type == "at_event":
+            return wording.at_event(f["subject"], f["attribute"], f["value"], f["event"])
+        if c.type == "change":
+            return wording.change(f["subject"], f["attribute"], f["from"], f["to"])
+        if c.type == "relation":
+            return wording.relation(f["subject"], f["link"], f["attribute"], f["value"])
+        if c.type == "compare":
+            kind = kb.lexicon._kinds.get((f["left"]["subject"], f["left"]["attribute"]), "")
+            phrase = (DATE_PHRASES if kind == "date" else AMOUNT_PHRASES)[f["op"]]
+            return wording.compare(f["left"]["subject"], f["left"]["attribute"], f["right"]["subject"],
+                                   f["right"]["attribute"], phrase, kind)
+    except (KeyError, TypeError):
+        pass
+    return []
+
+
 GENERATORS = {"fact": fact_claims, "compare": compare_claims, "change": change_claims,
               "at_event": at_event_claims, "relation": relation_claims}
 # each type's share of the 1,000 (sums to 1,000): claims that connect facts (relation,
@@ -213,11 +236,14 @@ def generate(kb: KB, input_texts: set[str], n: int = N_CLAIMS) -> list[Claim]:
         pool = []
         for c in gen(kb):
             c.id = "candidate"
-            key = normalize_text(c.text)
-            if key in seen_text or validate(c, kb.lexicon, input_texts):
-                continue
-            seen_text.add(key)
-            pool.append(c)
+            # the most natural wording the referee clone accepts; the plain template last
+            for text in [o + "." for o in _options(c, kb)] + [c.text]:
+                c.text = text
+                key = normalize_text(text)
+                if key not in seen_text and not validate(c, kb.lexicon, input_texts):
+                    seen_text.add(key)
+                    pool.append(c)
+                    break
         pool.sort(key=lambda c: -c.confidence)
         pools[t] = pool
     chosen = []
