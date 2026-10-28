@@ -1,170 +1,124 @@
-"""Claim validator for Polygraph."""
+"""Our clone of the referee's claim checks (contracts/claim-forms.md + entry.schema.json).
+
+A claim ships only when validate() returns no problems.
+
+STATUS: structural checks (schema, lexicon names, length, no copy of an input row, no
+refused words). The text checks that need the reader (the sentence states exactly the
+form's value, one value of its kind, no negation...) land once reader.IMPLEMENTED is True.
+Owner: backend teammate (branch `forge`), see docs/BRIEF_backend.md.
+"""
+from __future__ import annotations
+
 import re
-import json
 
-ID_PATTERN = re.compile(r'^[A-Za-z0-9_.\-]{1,64}$')
-VALID_TYPES = {"fact", "compare", "change", "at_event", "relation"}
-NEGATION_WORDS = re.compile(r'\b(not|never|no|without|n\'t|neither|nor|cannot|can\'t)\b', re.IGNORECASE)
-# Word numbers that count as numbers in compare claims
-WORD_NUMBERS = re.compile(
-    r'\b(zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|'
-    r'thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|'
-    r'thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|million|'
-    r'billion|a dozen|dozen|a few|a couple|several|many|numerous)\b',
-    re.IGNORECASE
-)
-MONTH_NAMES = re.compile(
-    r'\b(january|february|march|april|may|june|july|august|september|october|november|december)\b',
-    re.IGNORECASE
-)
-TIME_WORDS = re.compile(
-    r'\b(ago|yesterday|before|after|since|recently|previously|formerly|'
-    r'used to|once|later|earlier|last|next|current|now|today|then|when)\b',
-    re.IGNORECASE
-)
+from . import reader
+from .lexicon import Lexicon
+from .model import Claim
+
+TYPES = {"fact", "compare", "change", "at_event", "relation"}
+ID = re.compile(r"^[A-Za-z0-9_.-]{1,64}$")
+MONTHS_SEASONS_DAYS = ["January", "February", "March", "April", "May", "June", "July", "August",
+                       "September", "October", "November", "December", "spring", "summer",
+                       "autumn", "winter", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday",
+                       "Saturday", "Sunday"]
+TIME_WORDS = ["ago", "yesterday", "tomorrow", "once", "formerly", "previously", "originally",
+              "initially", "recently", "lately", "soon", "eventually", "then", "before", "after",
+              "since", "until", "till", "earlier", "later", "used to", "last week", "last month",
+              "last quarter", "last year", "next week", "next month", "next quarter", "next year",
+              "in the past", "in the future", "at the time", "at that time"]
+NEGATION = re.compile(r"\b(?:not|no|never|none|nobody|nothing|neither|nor|without|cannot)\b|n't\b", re.I)
 
 
-def validate_claim(claim: dict) -> list:
-    """Return list of problems. Empty list = valid."""
-    problems = []
-
-    # id
-    cid = claim.get("id", "")
-    if not ID_PATTERN.match(str(cid)):
-        problems.append(f"id '{cid}' does not match pattern")
-
-    # type
-    ctype = claim.get("type", "")
-    if ctype not in VALID_TYPES:
-        problems.append(f"type '{ctype}' is not valid")
-
-    # text
-    text = claim.get("text", "")
-    if not isinstance(text, str) or len(text) < 1 or len(text) > 300:
-        problems.append(f"text length {len(text)} out of range 1-300")
-
-    # label
-    if claim.get("label") != "true":
-        problems.append(f"label must be 'true', got '{claim.get('label')}'")
-
-    # confidence
-    try:
-        conf = float(claim.get("confidence", 0))
-        if not (0.5 <= conf <= 1.0):
-            problems.append(f"confidence {conf} out of range 0.5-1.0")
-    except (TypeError, ValueError):
-        problems.append(f"confidence '{claim.get('confidence')}' is not a float")
-
-    # form
-    form = claim.get("form")
-    if isinstance(form, str):
-        try:
-            form = json.loads(form)
-        except json.JSONDecodeError:
-            problems.append("form is not valid JSON")
-            return problems
-    if not isinstance(form, dict):
-        problems.append(f"form must be a dict, got {type(form)}")
-        return problems
-
-    # Type-specific checks
-    if ctype == "fact":
-        _validate_fact(claim, form, text, problems)
-    elif ctype == "compare":
-        _validate_compare(claim, form, text, problems)
-    elif ctype == "change":
-        _validate_change(claim, form, text, problems)
-    elif ctype == "at_event":
-        _validate_at_event(claim, form, text, problems)
-    elif ctype == "relation":
-        _validate_relation(claim, form, text, problems)
-
-    return problems
+def has_time_word(text: str) -> list[str]:
+    found = []
+    for w in TIME_WORDS:
+        if re.search(r"(?<![A-Za-z])" + re.escape(w) + r"(?![A-Za-z])", text, re.I):
+            found.append(w)
+    for w in MONTHS_SEASONS_DAYS:
+        flags = 0 if w == "May" else re.I  # `may` is the month only when written May
+        if re.search(r"(?<![A-Za-z])" + w + r"(?![A-Za-z])", text, flags):
+            found.append(w)
+    return found
 
 
-def _validate_fact(claim, form, text, problems):
-    if "subject" not in form:
-        problems.append("fact form missing 'subject'")
-    if "attribute" not in form:
-        problems.append("fact form missing 'attribute'")
-    if "value" not in form:
-        problems.append("fact form missing 'value'")
-
-    # Check subject appears in text
-    subject = form.get("subject", "")
-    if subject and subject not in text:
-        problems.append(f"fact: subject '{subject}' not in text")
-
-    # No negation for non-boolean true facts
-    value = form.get("value", {})
-    if value.get("kind") != "boolean" or value.get("value") == True:
-        if NEGATION_WORDS.search(text):
-            # Allow negation in boolean-false sentences
-            if not (value.get("kind") == "boolean" and value.get("value") == False):
-                problems.append("fact: negation word found in text")
+def _names_ok(lex: Lexicon, subject: str, attribute: str | None, why: list[str], what: str):
+    canon = lex.canonical(subject)
+    if canon is None:
+        why.append(f"{what}: unknown subject {subject!r}")
+    elif attribute is not None and not lex.has(canon, attribute):
+        why.append(f"{what}: {canon!r} has no attribute {attribute!r}")
 
 
-def _validate_compare(claim, form, text, problems):
-    if "left" not in form:
-        problems.append("compare form missing 'left'")
-    if "right" not in form:
-        problems.append("compare form missing 'right'")
-    if "op" not in form:
-        problems.append("compare form missing 'op'")
-    if form.get("op") not in ("gt", "lt", "eq"):
-        problems.append(f"compare op '{form.get('op')}' must be gt/lt/eq")
-
-    # No digits in text
-    if re.search(r'\d', text):
-        problems.append("compare: digits found in text")
-
-    # No word numbers
-    if WORD_NUMBERS.search(text):
-        problems.append("compare: word numbers found in text")
-
-    # No month names
-    if MONTH_NAMES.search(text):
-        problems.append("compare: month name found in text")
-
-    # No time words
-    if TIME_WORDS.search(text):
-        problems.append("compare: time word found in text")
-
-
-def _validate_change(claim, form, text, problems):
-    if "subject" not in form:
-        problems.append("change form missing 'subject'")
-    if "from" not in form:
-        problems.append("change form missing 'from'")
-    if "to" not in form:
-        problems.append("change form missing 'to'")
-
-
-def _validate_at_event(claim, form, text, problems):
-    if "subject" not in form:
-        problems.append("at_event form missing 'subject'")
-    if "attribute" not in form:
-        problems.append("at_event form missing 'attribute'")
-    if "event" not in form:
-        problems.append("at_event form missing 'event'")
-    if "value" not in form:
-        problems.append("at_event form missing 'value'")
-
-    # event name should appear in text
-    event = form.get("event", "")
-    if event and event not in text:
-        problems.append(f"at_event: event '{event}' not in text")
-
-    # subject should appear in text
-    subject = form.get("subject", "")
-    if subject and subject not in text:
-        problems.append(f"at_event: subject '{subject}' not in text")
+def validate(claim: Claim, lex: Lexicon, input_texts: set[str] | None = None) -> list[str]:
+    why: list[str] = []
+    if not ID.match(claim.id):
+        why.append("id")
+    if claim.type not in TYPES:
+        why.append("type")
+    text = claim.text.strip()
+    if not text or len(text) > 300:
+        why.append("text length")
+    if input_texts is not None and normalize_text(text) in input_texts:
+        why.append("a copy of an input row")
+    if not 0.5 <= claim.confidence <= 1:
+        why.append("confidence")
+    f = claim.form
+    if claim.type in ("fact", "change", "at_event"):
+        _names_ok(lex, f.get("subject", ""), f.get("attribute", ""), why, "subject")
+    if claim.type == "at_event":
+        if lex.canonical(f.get("event", "")) not in lex.events:
+            why.append("event not in the lexicon's events")
+    if claim.type == "compare":
+        for side in ("left", "right"):
+            _names_ok(lex, f.get(side, {}).get("subject", ""), f.get(side, {}).get("attribute", ""), why, side)
+        if f.get("op") not in ("gt", "lt", "eq"):
+            why.append("op")
+    if claim.type == "relation":
+        _names_ok(lex, f.get("subject", ""), f.get("link", ""), why, "link")
+        _names_ok(lex, f.get("target", ""), f.get("attribute", ""), why, "target")
+    for k in ("value", "from", "to"):
+        if isinstance(f.get(k), dict) and "op" in f[k]:
+            why.append(f"{k} has an op")
+        # the referee resolves a name value through the lexicon's spellings only
+        if isinstance(f.get(k), dict) and f[k].get("kind") == "name" and lex.canonical(f[k]["value"]) is None:
+            why.append(f"{k}: name {f[k]['value']!r} is not in the lexicon")
+    if claim.type != "change":
+        rest = _outside_names(text, lex)
+        v = f.get("value")
+        if isinstance(v, dict) and v.get("kind") == "date":  # the value may be a date itself
+            from .render import render
+            rest = rest.replace(render(v) or "\0", " ")
+        if claim.type == "compare":  # the op phrase's own words are allowed
+            rest = re.sub(r"\b(?:later than|earlier than|after|before|on the same day as|the same day as)\b",
+                          " ", rest, count=1, flags=re.I)
+        if claim.type == "at_event":  # so is the event phrase
+            rest = re.sub(r"\b(?:at the time of|on the day of)\b", " ", rest, count=1, flags=re.I)
+        tw = has_time_word(rest)
+        if tw:
+            why.append(f"time words {tw}")
+    if NEGATION.search(text) and not _is_boolean(claim):
+        why.append("negation")
+    if reader.IMPLEMENTED:
+        pass  # TODO(forge): read the text back with reader.parse_values and check the values
+    return why
 
 
-def _validate_relation(claim, form, text, problems):
-    if "subject" not in form:
-        problems.append("relation form missing 'subject'")
-    if "link" not in form:
-        problems.append("relation form missing 'link'")
-    if "target" not in form:
-        problems.append("relation form missing 'target'")
+def _is_boolean(claim: Claim) -> bool:
+    f = claim.form
+    return any(isinstance(f.get(k), dict) and f[k].get("kind") == "boolean" for k in ("value", "from", "to"))
+
+
+def _outside_names(text: str, lex: Lexicon) -> str:
+    """The text with every lexicon name blanked out: words inside names don't count."""
+    from .linker import Linker
+    linker = getattr(lex, "_linker", None) or Linker(lex)
+    lex._linker = linker
+    out = list(text)
+    for m in linker.find(text):
+        out[m.start:m.end] = " " * (m.end - m.start)
+    return "".join(out)
+
+
+def normalize_text(text: str) -> str:
+    """How check_output.py compares a claim with the input rows."""
+    return " ".join(text.lower().split()).rstrip(".!? ")

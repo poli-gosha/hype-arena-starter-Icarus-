@@ -1,160 +1,98 @@
-"""Value renderer for Polygraph claim generator."""
+"""Writing a value in words exactly as contracts/value-forms.md reads it.
 
-CURRENCY_SYMBOLS = {"EUR": "€", "USD": "$", "GBP": "£"}
+The forge uses this to put values into claim texts. Every form here must read back to the
+same value through reader.parse_values (tests/test_render.py checks the round trip).
+"""
+from __future__ import annotations
 
-MONTH_NAMES = [
-    "", "January", "February", "March", "April", "May", "June",
-    "July", "August", "September", "October", "November", "December"
-]
+import re
 
-# Attribute name overrides
-ATTR_OVERRIDES = {
-    "cto": "CTO",
-    "ceo": "CEO",
-    "coo": "COO",
-    "cpo": "CPO",
-    "cso": "CSO",
-    "vp_engineering": "VP Engineering",
-    "vp_product": "VP Product",
-    "vp_sales": "VP Sales",
-    "vp_marketing": "VP Marketing",
-    "soc2_certified": "SOC 2 certified",
-    "soc2": "SOC 2",
-    "gdpr": "GDPR",
-    "api": "API",
-    "saml": "SAML",
-    "sso": "SSO",
-    "ai_sidebar": "AI sidebar",
-    "ai_search": "AI search",
-    "ai_suggestions": "AI suggestions",
-}
+MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August",
+          "September", "October", "November", "December"]
+SYMBOL_UNITS = {"B", "KB", "MB", "GB", "TB", "mm", "cm", "m", "km", "in", "g", "kg", "mAh",
+                "Hz", "kHz", "MHz", "GHz", "mW", "W", "kW"}
+CURRENCY_SYMBOL = {"EUR": "€", "USD": "$", "GBP": "£"}
+DURATION_WORD = {"ms": "ms", "s": "second", "min": "minute", "h": "hour", "day": "day",
+                 "week": "week", "month": "month", "year": "year"}
+IRREGULAR = {"person": "people", "inch": "inches", "child": "children", "man": "men",
+             "woman": "women", "foot": "feet", "index": "indices"}
 
 
-def render_date(d: str) -> str:
-    """2026-03-12 -> '12 March 2026', 2026-03 -> 'March 2026', 2026 -> '2026'"""
-    parts = d.split("-")
-    if len(parts) == 1:
-        return parts[0]
-    elif len(parts) == 2:
-        year, month = parts
-        return f"{MONTH_NAMES[int(month)]} {year}"
-    else:
-        year, month, day = parts
-        return f"{int(day)} {MONTH_NAMES[int(month)]} {year}"
+def number(x: float | int) -> str | None:
+    """Digits with commas between thousands. None when the number cannot be written so
+    that it reads unambiguously (three decimals reads as nothing outside a percentage)."""
+    if isinstance(x, float) and x.is_integer():
+        x = int(x)
+    if isinstance(x, int):
+        return f"{x:,}"
+    s = repr(x)
+    if "e" in s:
+        return None
+    whole, frac = s.split(".")
+    if len(frac) == 3:
+        return None
+    return f"{int(whole):,}.{frac}"
 
 
-def render_quantity(v, unit: str) -> str:
-    """12, 'language' -> '12 languages'; 10000, 'customer' -> '10,000 customers'"""
-    # Format number with commas for thousands
-    if isinstance(v, float) and v == int(v):
-        v = int(v)
-    num_str = f"{v:,}" if isinstance(v, int) else f"{v:,.2f}".rstrip("0").rstrip(".")
-    # Pluralize
-    plural = _pluralize(unit)
-    return f"{num_str} {plural}"
+def plural(noun: str, n: float) -> str:
+    if n == 1:
+        return noun
+    low = noun.lower()
+    if low in IRREGULAR:
+        return IRREGULAR[low]
+    if re.search(r"(s|x|z|ch|sh)$", low):
+        return noun + "es"
+    if re.search(r"[^aeiou]y$", low):
+        return noun[:-1] + "ies"
+    return noun + "s"
 
 
-def _pluralize(unit: str) -> str:
-    """Simple pluralization."""
-    special = {
-        "person": "people",
-        "company": "companies",
-        "country": "countries",
-        "city": "cities",
-        "category": "categories",
-        "query": "queries",
-        "entry": "entries",
-        "delivery": "deliveries",
-        "activity": "activities",
-        "min": "minutes",
-        "minute": "minutes",
-        "hour": "hours",
-        "day": "days",
-        "week": "weeks",
-        "month": "months",
-        "year": "years",
-        "second": "seconds",
-    }
-    if unit in special:
-        return special[unit]
-    if unit.endswith("s"):
-        return unit
-    if unit.endswith("y") and len(unit) > 1 and unit[-2] not in "aeiou":
-        return unit[:-1] + "ies"
-    if unit.endswith("sh") or unit.endswith("ch") or unit.endswith("x"):
-        return unit + "es"
-    return unit + "s"
+def date(v: str) -> str:
+    parts = v.split("-")
+    if len(parts) == 3:
+        return f"{int(parts[2])} {MONTHS[int(parts[1]) - 1]} {parts[0]}"
+    if len(parts) == 2:
+        return f"{MONTHS[int(parts[1]) - 1]} {parts[0]}"
+    return parts[0]
 
 
-def render_money(v, currency: str, per: str = None) -> str:
-    """59, 'EUR', 'month' -> '€59 per month'"""
-    symbol = CURRENCY_SYMBOLS.get(currency, currency)
-    if isinstance(v, float) and v == int(v):
-        v_str = str(int(v))
-    else:
-        v_str = f"{v:.2f}".rstrip("0").rstrip(".")
-    base = f"{symbol}{v_str}"
-    if per:
-        return f"{base} per {per}"
-    return base
-
-
-def render_value(value: dict) -> str:
-    """Render a value dict to its canonical text form."""
-    kind = value.get("kind")
+def render(v: dict) -> str | None:
+    """The value as text, or None when it has no safe written form. Booleans have none:
+    a yes or no is stated by the sentence's polarity (claim-forms.md)."""
+    kind = v.get("kind")
+    if kind == "quantity":
+        n = number(v["value"])
+        if n is None:
+            return None
+        unit = v["unit"]
+        if unit in SYMBOL_UNITS:
+            return f"{n} {unit}"
+        return f"{n} {plural(unit, v['value'])}"
     if kind == "money":
-        return render_money(value["value"], value["currency"], value.get("per"))
-    elif kind == "quantity":
-        return render_quantity(value["value"], value["unit"])
-    elif kind == "date":
-        return render_date(value["value"])
-    elif kind == "duration":
-        v = value["value"]
-        unit = value["unit"]
-        if isinstance(v, float) and v == int(v):
-            v = int(v)
-        return f"{v} {_pluralize(unit)}"
-    elif kind == "percent":
-        v = value["value"]
-        if isinstance(v, float) and v == int(v):
-            v_str = str(int(v))
-        else:
-            v_str = f"{v:g}"
-        return f"{v_str}%"
-    elif kind == "version":
-        ver = value["value"]
-        # Only add v prefix for simple major.minor (not patch versions)
-        parts = ver.split(".")
-        if len(parts) == 2:
-            return f"v{ver}"
-        return ver
-    elif kind == "boolean":
-        return "true" if value["value"] else "false"
-    elif kind == "name":
-        return value["value"]
-    else:
-        return str(value)
+        n = number(v["value"])
+        if n is None:
+            return None
+        cur = v["currency"]
+        s = f"{CURRENCY_SYMBOL[cur]}{n}" if cur in CURRENCY_SYMBOL else f"{n} {cur}"
+        return f"{s} per {v['per']}" if v.get("per") else s
+    if kind == "percent":
+        n = number(v["value"]) if len(repr(v["value"]).split(".")[-1]) != 3 else repr(v["value"])
+        return f"{n}%"
+    if kind == "date":
+        return date(v["value"])
+    if kind == "version":
+        return f"version {v['value']}"
+    if kind == "duration":
+        n = number(v["value"])
+        if n is None:
+            return None
+        word = DURATION_WORD.get(v["unit"], v["unit"])
+        return f"{n} {word}" if word == "ms" else f"{n} {plural(word, v['value'])}"
+    if kind == "name":
+        return v["value"]
+    return None
 
 
-def attr_to_words(attribute: str) -> str:
-    """Convert attribute name to readable words.
-    cto -> 'CTO'
-    series_a_lead -> 'Series A lead'
-    head_of_product -> 'head of product'
-    soc2_certified -> 'SOC 2 certified'
-    """
-    if attribute in ATTR_OVERRIDES:
-        return ATTR_OVERRIDES[attribute]
-    # Replace underscores with spaces
-    words = attribute.split("_")
-    result_words = []
-    for w in words:
-        if w in ATTR_OVERRIDES:
-            result_words.append(ATTR_OVERRIDES[w])
-        elif w.lower() in ("a", "an", "the", "of", "in", "at", "by", "for", "and", "or"):
-            result_words.append(w.lower())
-        elif w.upper() in ("CEO", "CTO", "COO", "CPO", "VP", "API", "SOC2", "SOC", "GDPR", "AI", "SSO", "SAML"):
-            result_words.append(w.upper())
-        else:
-            result_words.append(w.lower())
-    return " ".join(result_words)
+def attribute_words(attribute: str) -> str:
+    """`soc2_certified` -> `soc2 certified`: the attribute in words, as the referee reads it."""
+    return attribute.replace("_", " ")

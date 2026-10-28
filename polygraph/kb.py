@@ -1,179 +1,108 @@
-"""Knowledge Base for Polygraph claim generator."""
-import csv
-import json
+"""The knowledge base: each fact's timeline as a staircase of Steps.
+
+The truth engine fills it from all rows; until then `KB.from_gold` builds it from the
+practice rows' `form` column (the facts the organizers extracted), so the forge and the
+frontend can be built against real data from minute one.
+"""
+from __future__ import annotations
+
 from collections import defaultdict
-from dataclasses import dataclass, field
-from typing import Any
+from typing import Iterable, Optional
+
+from . import AS_OF
+from .lexicon import Lexicon
+from .model import Row, Step, more_precise, same_value
 
 
-@dataclass
-class Mention:
-    date: str
-    value: dict
-    row_id: str
-    text: str
+class KB:
+    def __init__(self, lexicon: Lexicon):
+        self.lexicon = lexicon
+        self.timelines: dict[tuple[str, str], list[Step]] = {}
+        # every mention behind a timeline, for the frontend's evidence board:
+        # (subject, attribute) -> [{date, value, row_id, verdict}]
+        self.mentions: dict[tuple[str, str], list[dict]] = defaultdict(list)
 
+    # ---- reading -------------------------------------------------------------------
+    def timeline(self, subject: str, attribute: str) -> list[Step]:
+        return self.timelines.get((subject, attribute), [])
 
-@dataclass
-class FactTimeline:
-    subject: str
-    attribute: str
-    mentions: list  # list of Mention, sorted by date
+    def value_on(self, subject: str, attribute: str, day: str) -> Optional[Step]:
+        """The step that holds on `day` (YYYY-MM-DD), or None."""
+        for s in self.timeline(subject, attribute):
+            if s.start <= day and (s.end is None or day < s.end):
+                return s
+        return None
 
-    def current_value(self) -> dict:
-        """Return the most recent value (latest date)."""
-        if not self.mentions:
-            return {}
-        latest_date = max(m.date for m in self.mentions)
-        latest = [m for m in self.mentions if m.date == latest_date]
-        if len(latest) == 1:
-            return latest[0].value
-        # Multiple mentions on latest date: use most common value
-        from collections import Counter
-        counts = Counter(json.dumps(m.value, sort_keys=True) for m in latest)
-        most_common_str = counts.most_common(1)[0][0]
-        return json.loads(most_common_str)
+    def current(self, subject: str, attribute: str) -> Optional[Step]:
+        """The value on the as-of date, 29 Oct 2026."""
+        return self.value_on(subject, attribute, AS_OF)
 
-    def earliest_value(self) -> dict:
-        """Return the earliest value."""
-        if not self.mentions:
-            return {}
-        earliest_date = min(m.date for m in self.mentions)
-        earliest = [m for m in self.mentions if m.date == earliest_date]
-        return earliest[0].value
+    def facts(self) -> Iterable[tuple[str, str]]:
+        return self.timelines.keys()
 
-    def had_change(self) -> bool:
-        """Return True if the value changed over time."""
-        if len(self.mentions) < 2:
-            return False
-        first = self.earliest_value()
-        last = self.current_value()
-        return json.dumps(first, sort_keys=True) != json.dumps(last, sort_keys=True)
+    @property
+    def events(self) -> dict[str, str]:
+        """Event name -> its date (YYYY-MM-DD or coarser), from the event's `date` fact."""
+        out = {}
+        for e in self.lexicon.events:
+            step = self.current(e, "date") or (self.timeline(e, "date") or [None])[-1]
+            if step is not None:
+                out[e] = step.value["value"]
+        return out
 
-    def distinct_values(self) -> list:
-        """Return list of (date, value) for distinct value changes, sorted by date."""
-        seen = {}
-        # Group by date, take most common per date
-        from collections import Counter
-        by_date = defaultdict(list)
-        for m in self.mentions:
-            by_date[m.date].append(m.value)
-        
-        result = []
-        last_val_str = None
-        for date in sorted(by_date.keys()):
-            vals = by_date[date]
-            counts = Counter(json.dumps(v, sort_keys=True) for v in vals)
-            val_str = counts.most_common(1)[0][0]
-            if val_str != last_val_str:
-                result.append((date, json.loads(val_str)))
-                last_val_str = val_str
-        return result
+    def links(self) -> dict[tuple[str, str], list[Step]]:
+        """(subject, link attribute) -> steps whose value names another lexicon entity,
+        e.g. (Hooly, cto) -> [Step(value={"kind": "name", "value": "Bertram Gilfoil"})]."""
+        out = {}
+        for (subj, attr), steps in self.timelines.items():
+            if steps and all(s.value.get("kind") == "name" and self.lexicon.canonical(s.value["value"])
+                             for s in steps):
+                out[(subj, attr)] = steps
+        return out
 
+    # ---- building ------------------------------------------------------------------
+    @staticmethod
+    def staircase(points: list[tuple[str, dict]], weights: Optional[list[float]] = None) -> list[Step]:
+        """Collapse dated (date, value) points that are all believed true into Steps:
+        consecutive equal values merge; a step ends where the next one starts."""
+        if not points:
+            return []
+        order = sorted(range(len(points)), key=lambda i: points[i][0])
+        steps: list[Step] = []
+        for i in order:
+            d, v = points[i]
+            w = weights[i] if weights else 1.0
+            if steps and same_value(steps[-1].value, v):
+                s = steps[-1]
+                s.value = more_precise(s.value, v)
+                s.support += 1
+                s.confidence = max(s.confidence, w)
+                s.last_seen = d
+                continue
+            if steps and steps[-1].start == d:
+                # two values on one day: keep the better supported one
+                if w > steps[-1].confidence:
+                    steps[-1] = Step(d, None, v, w, 1, d)
+                continue
+            if steps:
+                steps[-1].end = d
+            steps.append(Step(d, None, v, w, 1, d))
+        return steps
 
-class KnowledgeBase:
-    def __init__(self, practice_csv: str, lexicon_json: str):
-        self.timelines: dict[tuple, FactTimeline] = {}  # (subject, attribute) -> FactTimeline
-        self.subjects: dict[str, dict] = {}  # name -> {aliases, attributes}
-        self.events: dict[str, str] = {}  # event name -> date
-        self._existing_texts: set = set()  # normalized existing texts
-        self._load(practice_csv, lexicon_json)
-
-    def _normalize_text(self, text: str) -> str:
-        import re
-        return re.sub(r'\s+', ' ', text.strip().lower())
-
-    def _load(self, practice_csv: str, lexicon_json: str):
-        # Load lexicon
-        with open(lexicon_json, encoding="utf-8") as f:
-            lexicon = json.load(f)
-        for subj in lexicon["subjects"]:
-            self.subjects[subj["name"]] = subj
-        self.events = {e: None for e in lexicon["events"]}
-
-        # Load practice.csv - only true rows
-        raw_mentions: dict[tuple, list] = defaultdict(list)
-        with open(practice_csv, encoding="utf-8") as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                if row["label"] != "true":
-                    continue
-                self._existing_texts.add(self._normalize_text(row["text"]))
-                try:
-                    forms = json.loads(row["form"])
-                except json.JSONDecodeError:
-                    continue
-                for entry in forms:
-                    subj = entry.get("subject", "")
-                    attr = entry.get("attribute", "")
-                    val = entry.get("value", {})
-                    if not subj or not attr or not val:
-                        continue
-                    mention = Mention(
-                        date=row["date"],
-                        value=val,
-                        row_id=row["id"],
-                        text=row["text"],
-                    )
-                    raw_mentions[(subj, attr)].append(mention)
-
-        # Build FactTimelines, sorted by date
-        for (subj, attr), mentions in raw_mentions.items():
-            sorted_mentions = sorted(mentions, key=lambda m: m.date)
-            self.timelines[(subj, attr)] = FactTimeline(
-                subject=subj,
-                attribute=attr,
-                mentions=sorted_mentions,
-            )
-
-        # Extract event dates from KB
-        for event_name in list(self.events.keys()):
-            tl = self.timelines.get((event_name, "date"))
-            if tl:
-                # Use most confident date: latest mention with most common value
-                cv = tl.current_value()
-                if cv.get("kind") == "date" and len(cv.get("value", "")) == 10:
-                    self.events[event_name] = cv["value"]
-                else:
-                    # Try to find full date mentions
-                    full_dates = [
-                        m.value["value"] for m in tl.mentions
-                        if len(m.value.get("value", "")) == 10
-                    ]
-                    if full_dates:
-                        from collections import Counter
-                        self.events[event_name] = Counter(full_dates).most_common(1)[0][0]
-
-    def get_timeline(self, subject: str, attribute: str) -> "FactTimeline | None":
-        return self.timelines.get((subject, attribute))
-
-    def all_timelines(self) -> list:
-        return list(self.timelines.values())
-
-    def get_subject(self, name: str) -> "dict | None":
-        return self.subjects.get(name)
-
-    def is_existing_text(self, text: str) -> bool:
-        return self._normalize_text(text) in self._existing_texts
-
-    def get_mentions_on_date(self, date: str) -> list:
-        """Return all (subject, attribute, value) tuples for mentions on a given date."""
-        results = []
-        for (subj, attr), tl in self.timelines.items():
-            for m in tl.mentions:
-                if m.date == date:
-                    results.append((subj, attr, m.value))
-                    break  # one per (subj, attr) per date
-        return results
-
-    def link_facts(self) -> list:
-        """Return (subject, link_attr, target_name, target_subject) tuples
-        where a subject's attribute value is a name of another subject."""
-        results = []
-        for (subj, attr), tl in self.timelines.items():
-            cv = tl.current_value()
-            if cv.get("kind") == "name":
-                target_name = cv["value"]
-                if target_name in self.subjects:
-                    results.append((subj, attr, target_name, target_name))
-        return results
+    @classmethod
+    def from_gold(cls, lexicon: Lexicon, rows: list[Row], forms: dict[str, list[dict]]) -> "KB":
+        """A KB from the labelled rows' gold forms. Only rows labelled `true` place points;
+        a row whose label is hidden (empty) is left out, so evaluation never leaks."""
+        kb = cls(lexicon)
+        points: dict[tuple[str, str], list[tuple[str, dict]]] = defaultdict(list)
+        for r in rows:
+            for f in forms.get(r.id, []):
+                key = (f["subject"], f["attribute"])
+                if r.label:
+                    kb.mentions[key].append({"date": r.date, "value": f["value"], "row_id": r.id,
+                                             "verdict": r.label})
+                if r.label == "true" and f["value"].get("op", "eq") == "eq":
+                    points[key].append((r.date, f["value"]))
+        for key, pts in points.items():
+            kb.timelines[key] = cls.staircase(pts)
+        return kb
