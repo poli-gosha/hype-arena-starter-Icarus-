@@ -10,7 +10,7 @@ Endpoints (contract in docs/BRIEF_frontend.md):
                              returns the trace JSON for just these rows
   GET  /api/sample        -> the rows of sample/sample.csv (from 09:00 on 29 Oct), if present
   GET  /api/claims        -> the 1,000 claims the system writes on the practice universe
-If web/dist exists (the built frontend), it is served at /.
+The page at / is web/dist (the frontend teammate's built UI) if it exists, else server/static.
 """
 from __future__ import annotations
 
@@ -134,5 +134,6 @@ def claims():
     return {"claims": _claims()}
 
 
-if (ROOT / "web" / "dist").exists():
-    app.mount("/", StaticFiles(directory=ROOT / "web" / "dist", html=True), name="web")
+# the frontend teammate's built UI if there is one, else our own console (server/static)
+WEB = ROOT / "web" / "dist" if (ROOT / "web" / "dist" / "index.html").exists() else ROOT / "server" / "static"
+app.mount("/", StaticFiles(directory=WEB, html=True), name="web")

@@ -69,10 +69,10 @@ def _fit_staircase(ms: list[Mention]) -> dict[str, str]:
         for v in values:
             c = 0.0
             for m in by_date[d]:
-                if m.anchor > 0:
-                    c += ANCHOR * (m.key != v)
+                if m.anchor > 0:  # labelled true (1), or a confident guess (soft, < 1)
+                    c += ANCHOR * m.anchor * (m.key != v) + (1 - m.anchor) * m.weight * (m.key != v)
                 elif m.anchor < 0:
-                    c += ANCHOR * (m.key == v)
+                    c += ANCHOR * -m.anchor * (m.key == v)
                 else:
                     c += m.weight * (m.key != v)
             cost[v] = c
@@ -101,9 +101,9 @@ def _steps(on_date: dict[str, str], ms: list[Mention]) -> list[Step]:
     steps: list[Step] = []
     for d in sorted(on_date):
         k = on_date[d]
-        agree = sum(1 for m in ms if m.date == d and m.key == k and m.anchor >= 0)
-        anchors = sum(1 for m in ms if m.date == d and m.key == k and m.anchor > 0)
-        dissent = sum(1 for m in ms if m.date == d and m.key != k and m.anchor == 0)
+        agree = sum(1 for m in ms if m.date == d and m.key == k and m.anchor > -1)
+        anchors = sum(1 for m in ms if m.date == d and m.key == k and m.anchor >= 1)
+        dissent = sum(1 for m in ms if m.date == d and m.key != k and abs(m.anchor) < 1)
         if steps and value_key(steps[-1].value) == k:
             s = steps[-1]
             s.support += agree
@@ -123,17 +123,18 @@ def _steps(on_date: dict[str, str], ms: list[Mention]) -> list[Step]:
 TIMER = {"ms": 0.0}  # time spent here, for the pipeline's stage timings
 
 
-def build(lexicon: Lexicon, rows: list[Row], facts: dict[str, list[Fact]]) -> Truth:
+def build(lexicon: Lexicon, rows: list[Row], facts: dict[str, list[Fact]], soft: dict | None = None) -> Truth:
     """Fit the timelines. `facts` holds every row's facts (gold forms for practice rows the
     input labels, extracted ones for the rest)."""
     t0 = time.perf_counter()
     try:
-        return _build(lexicon, rows, facts)
+        return _build(lexicon, rows, facts, soft or {})
     finally:
         TIMER["ms"] += (time.perf_counter() - t0) * 1000
 
 
-def _build(lexicon: Lexicon, rows: list[Row], facts: dict[str, list[Fact]]) -> Truth:
+def _build(lexicon: Lexicon, rows: list[Row], facts: dict[str, list[Fact]], soft: dict) -> Truth:
+    """soft: row id -> a weak anchor in (-1, 1) from a confident first-pass verdict (self-training)."""
     page_of = {r.id: r.page for r in rows}
     label_of = {r.id: r.label for r in rows}
     trust = {r.page: PRIOR_TRUST for r in rows}
@@ -150,7 +151,7 @@ def _build(lexicon: Lexicon, rows: list[Row], facts: dict[str, list[Fact]]) -> T
         for key, items in fact_rows.items():
             ms = []
             for r, f in items:
-                anchor = 1 if r.label == "true" else -1 if r.label == "false" else 0
+                anchor = 1 if r.label == "true" else -1 if r.label == "false" else soft.get(r.id, 0.0)
                 ms.append(Mention(r.id, r.date, f.value, value_key(f.value),
                                   trust[r.page] * f.score, anchor))
             mentions[key] = ms

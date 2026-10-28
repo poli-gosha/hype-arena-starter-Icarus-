@@ -40,6 +40,9 @@ _m = [float(x) for x in os.environ.get("POLY_MODEL", "120,0.06,7,20").split(",")
 MODEL = {"iter": int(_m[0]), "lr": _m[1], "leaves": int(_m[2]), "min_leaf": int(_m[3])}
 STACK = os.environ.get("POLY_STACK", "1") == "1"  # the page-level second pass
 BAGS = int(os.environ.get("POLY_BAGS", 1))  # models averaged over bootstrap resamples
+SELF_TRAIN = os.environ.get("POLY_SELF", "1") == "1"  # self-training: confident verdicts as weak anchors
+SOFT = float(os.environ.get("POLY_SOFT", 0.6))  # how strong such a weak anchor is (a label is 1)
+SOFT_LO, SOFT_HI = 0.08, 0.85  # P(false) below / above which a verdict counts as confident
 TEXT_MODEL = os.environ.get("POLY_TEXT", "0") == "1"  # a word-pattern model as a judge input (5-fold CV: no gain, off)
 PROBA: dict[str, dict] = {}  # last run's class probabilities per row (for analysis)
 STATUS = ["agrees", "stale", "premature", "invented", "unknown"]
@@ -73,7 +76,7 @@ def fact_status(t: truth_mod.Truth, f: Fact, row: Row) -> tuple[str, dict]:
             "anchor_true_same": 0, "anchor_false_same": 0, "anchor_true_near_same": 0, "gap_days": 999,
             "prev_same": -1, "next_same": -1, "top_value": 0, "n_values": 0, "w_same_near": 0.0, "w_diff_near": 0.0,
             "anchor_false_near_diff": 0, "anchor_true_near_diff": 0, "days_to_true_diff": 400,
-            "days_to_true_same": 400}
+            "days_to_true_same": 400, "superseded": 0.0, "superseded_anchor": 0, "not_yet": 0.0, "not_yet_anchor": 0, "diff_before_any": 0.0, "diff_after_any": 0.0, "bracketed": 0.0}
     if not others:
         return "unknown", info
     k = value_key({kk: vv for kk, vv in f.value.items() if kk != "op"})
@@ -85,13 +88,34 @@ def fact_status(t: truth_mod.Truth, f: Fact, row: Row) -> tuple[str, dict]:
         info["prev_same"] = float(max(before, key=lambda m: m.date).key == k)
     if after:
         info["next_same"] = float(min(after, key=lambda m: m.date).key == k)
+    # the order of things around a change: since this value was last seen, has a newer one
+    # appeared (stale)? before it is first seen, does another still hold (premature)?
+    same_before = [m.date for m in others if m.key == k and m.date < d]
+    same_after = [m.date for m in others if m.key == k and m.date > d]
+    lsb = max(same_before) if same_before else None
+    fsa = min(same_after) if same_after else None
+    for m in others:
+        if m.key == k:
+            continue
+        w = 3.0 if m.anchor >= 1 else (0.0 if m.anchor <= -1 else m.weight)
+        if lsb is not None and lsb < m.date <= d:
+            info["superseded"] += w
+            info["superseded_anchor"] += m.anchor >= 1
+        if fsa is not None and d <= m.date < fsa:
+            info["not_yet"] += w
+            info["not_yet_anchor"] += m.anchor >= 1
+        if lsb is None and m.date <= d:
+            info["diff_before_any"] += w
+        if fsa is None and m.date >= d:
+            info["diff_after_any"] += w
+    info["bracketed"] = float(lsb is not None and fsa is not None)
     counts = defaultdict(float)
     for m in others:
         counts[m.key] += 1
     info["n_values"] = len(counts)
     info["top_value"] = float(max(counts, key=counts.get) == k)
     for m in others:
-        if m.anchor > 0:  # a confirmed-true row: how close is it, and does it agree?
+        if m.anchor >= 1:  # a confirmed-true row: how close is it, and does it agree?
             gap = abs(_days(m.date) - dd)
             if m.key == k:
                 info["days_to_true_same"] = min(info["days_to_true_same"], gap)
@@ -99,21 +123,21 @@ def fact_status(t: truth_mod.Truth, f: Fact, row: Row) -> tuple[str, dict]:
                 info["days_to_true_diff"] = min(info["days_to_true_diff"], gap)
                 info["anchor_true_near_diff"] += gap <= 60
         if abs(_days(m.date) - dd) <= 60:
-            w = m.weight if m.anchor == 0 else 3.0
+            w = m.weight if abs(m.anchor) < 1 else 3.0
             if m.key == k:
-                info["w_same_near"] += w if m.anchor >= 0 else -3.0
+                info["w_same_near"] += w if m.anchor > -1 else -3.0
             else:
-                info["w_diff_near"] += w if m.anchor >= 0 else 0.0
-                info["anchor_false_near_diff"] += m.anchor < 0
+                info["w_diff_near"] += w if m.anchor > -1 else 0.0
+                info["anchor_false_near_diff"] += m.anchor <= -1
     for m in others:
         same = m.key == k
         near = abs(_days(m.date) - _days(d)) <= 30
         info["same_any"] += same
         info["same_near"] += same and near
         info["diff_near"] += (not same) and near
-        info["anchor_true_same"] += same and m.anchor > 0
-        info["anchor_false_same"] += same and m.anchor < 0
-        info["anchor_true_near_same"] += same and near and m.anchor > 0
+        info["anchor_true_same"] += same and m.anchor >= 1
+        info["anchor_false_same"] += same and m.anchor <= -1
+        info["anchor_true_near_same"] += same and near and m.anchor >= 1
         info["gap_days"] = min(info["gap_days"], abs(_days(m.date) - _days(d)))
     od = t.on_date.get(key, {})
     held = od.get(d)
@@ -207,7 +231,7 @@ def row_features(r: Row, fs: list[Fact], t: truth_mod.Truth, page_info: dict) ->
                         "anchor_false_same": 0, "anchor_true_near_same": 0, "gap_days": 999, "prev_same": -1,
                         "next_same": -1, "top_value": 0, "n_values": 0, "w_same_near": 0.0, "w_diff_near": 0.0,
                         "anchor_false_near_diff": 0, "anchor_true_near_diff": 0, "days_to_true_diff": 400,
-                        "days_to_true_same": 400}
+                        "days_to_true_same": 400, "superseded": 0.0, "superseded_anchor": 0, "not_yet": 0.0, "not_yet_anchor": 0, "diff_before_any": 0.0, "diff_after_any": 0.0, "bracketed": 0.0}
     n = len(fs)
     text = r.text
     sp = SPEAKER_RE.match(text)
@@ -233,6 +257,8 @@ def row_features(r: Row, fs: list[Fact], t: truth_mod.Truth, page_info: dict) ->
         wi.get("unit_match", -1), wi.get("rel_diff", -1), wi.get("elsewhere", -1), wi.get("score", -1),
         wi["anchor_true_near_diff"], wi["days_to_true_diff"], wi["days_to_true_same"],
         float(wi["days_to_true_diff"] < wi["days_to_true_same"]),
+        wi["superseded"], wi["superseded_anchor"], wi["not_yet"], wi["not_yet_anchor"],
+        wi["diff_before_any"], wi["diff_after_any"], wi["bracketed"],
     ]
     return x, details, worst
 
@@ -324,12 +350,12 @@ def reconcile(rows: list[Row], facts: dict[str, list[Fact]], t: truth_mod.Truth,
 
 
 def featurize(rows: list[Row], facts: dict[str, list[Fact]], lexicon: Lexicon, targets: set[str],
-              ctx: dict | None = None):
-    t = truth_mod.build(lexicon, rows, facts)
+              ctx: dict | None = None, soft: dict | None = None):
+    t = truth_mod.build(lexicon, rows, facts, soft)
     if ctx:
         facts, changed = reconcile(rows, facts, t, lexicon, targets, ctx)
         if changed:
-            t = truth_mod.build(lexicon, rows, facts)
+            t = truth_mod.build(lexicon, rows, facts, soft)
     pinfo = _page_info(rows, t, facts, set())
     out = {}
     for r in rows:
@@ -344,59 +370,17 @@ def label(rows: list[Row], facts: dict[str, list[Fact]], lexicon: Lexicon,
     """facts: every row's facts (gold for labelled practice rows). extracted: what the
     attributor makes of the labelled rows without having seen them; a labelled row being
     hidden for training uses these, exactly like an unlabelled row."""
-    from sklearn.ensemble import HistGradientBoostingClassifier
-
     labelled = [r for r in rows if r.label in CLASSES]
     unlabelled = [r for r in rows if not r.label]
     extracted = extracted or {}
-
-    # out-of-fold features for the labelled rows: refit the truth without their own labels
-    lab = {r.id: r.label for r in labelled}
-    page_of = {r.id: r.page for r in rows}
-    X, y, ids = [], [], []
-    for k in range(FOLDS):
-        fold = {r.id for r in labelled if r.page % FOLDS == k}
-        if not fold:
-            continue
-        rows_k = [replace(r, label="") if r.id in fold else r for r in rows]
-        facts_k = {**facts, **{rid: extracted[rid] for rid in fold if rid in extracted}}
-        feats, _ = featurize(rows_k, facts_k, lexicon, fold, ctx)
-        for rid, (x, _, _) in feats.items():
-            X.append(x)
-            y.append(lab[rid])
-            ids.append(rid)
-
-    feats, t = featurize(rows, facts, lexicon, {r.id for r in unlabelled}, ctx)
+    proba, classes, feats, t, pu = _fit_predict(rows, facts, lexicon, extracted, ctx, labelled, unlabelled)
+    if SELF_TRAIN and unlabelled and len(classes) > 1:
+        # self-training: confident first-pass verdicts become weak anchors for OTHER rows,
+        # and everything is judged again (a row never sees its own guess)
+        soft = {rid: (SOFT if p < SOFT_LO else -SOFT) for rid, p in pu.items() if p < SOFT_LO or p > SOFT_HI}
+        proba, classes, feats, _, _ = _fit_predict(rows, facts, lexicon, extracted, ctx, labelled, unlabelled, soft)
     if not unlabelled:
         return [], t
-    Xu = np.asarray([feats[r.id][0] for r in unlabelled], dtype=float)
-    if len(set(y)) >= 2:
-        X, y = np.asarray(X, dtype=float), np.asarray(y)
-        groups = np.asarray([page_of[i] % FOLDS for i in ids])
-        if TEXT_MODEL:
-            # how lie-like the wording is, from a word-pattern model trained on the labels
-            # (out of fold for the training rows, like every other feature)
-            text_of = {r.id: r.text for r in rows}
-            tl = [text_of[i] for i in ids]
-            tu = [r.text for r in unlabelled]
-            X = np.hstack([X, _text_oof(tl, y, groups)[:, None]])
-            Xu = np.hstack([Xu, _text_fit(tl, y).predict(tu)[:, None]])
-        if STACK:
-            # second pass: lies cluster by page, so add how suspicious the OTHER rows of the
-            # row's page look to the first pass. Training rows' page-mates are in the same
-            # fold (folds go by page), so their first-pass scores are out-of-fold too.
-            p1 = _oof_pfalse(X, y, groups)
-            pu = _pfalse(_model().fit(X, y), Xu)
-            score = {**dict(zip(ids, p1)), **{r.id: p for r, p in zip(unlabelled, pu)}}
-            X = np.hstack([X, _page_scores(ids, page_of, score)])
-            Xu = np.hstack([Xu, _page_scores([r.id for r in unlabelled], page_of, score)])
-        model = _model().fit(X, y)
-        proba = model.predict_proba(Xu)
-        classes = list(model.classes_)
-    else:
-        proba = np.tile([PRIOR_TRUE, 1 - PRIOR_TRUE], (len(unlabelled), 1))
-        classes = ["true", "false"]
-
     out = []
     for r, p in zip(unlabelled, proba):
         x, details, worst = feats[r.id]
@@ -416,6 +400,70 @@ def label(rows: list[Row], facts: dict[str, list[Fact]], lexicon: Lexicon,
             conf = max(pt, pf) / max(1e-9, pt + pf)
             out.append(Verdict(r.id, lab, float(min(1.0, max(0.5, conf))), why, details))
     return out, t
+
+
+def _fit_predict(rows, facts, lexicon, extracted, ctx, labelled, unlabelled, soft=None):
+    """Features (out of fold for the labelled rows) -> model -> class probabilities for the
+    unlabelled rows. soft: weak anchors for unlabelled rows (self-training). A training fold
+    sees all of them (its own rows are labelled, not soft); unlabelled rows are featurized in
+    two halves by page, each seeing only the other half's soft anchors."""
+    soft = soft or {}
+    lab = {r.id: r.label for r in labelled}
+    page_of = {r.id: r.page for r in rows}
+    X, y, ids = [], [], []
+    for k in range(FOLDS):
+        fold = {r.id for r in labelled if r.page % FOLDS == k}
+        if not fold:
+            continue
+        rows_k = [replace(r, label="") if r.id in fold else r for r in rows]
+        facts_k = {**facts, **{rid: extracted[rid] for rid in fold if rid in extracted}}
+        feats_k, _ = featurize(rows_k, facts_k, lexicon, fold, ctx, soft)
+        for rid, (x, _, _) in feats_k.items():
+            X.append(x)
+            y.append(lab[rid])
+            ids.append(rid)
+    targets = {r.id for r in unlabelled}
+    if soft:
+        feats = {}
+        for half in (0, 1):
+            mine = {r.id for r in unlabelled if r.page % 2 == half}
+            other = {rid: s for rid, s in soft.items() if rid not in mine}
+            f_half, t = featurize(rows, facts, lexicon, mine, ctx, other)
+            feats.update(f_half)
+    else:
+        feats, t = featurize(rows, facts, lexicon, targets, ctx)
+    if not unlabelled:
+        return None, [], feats, t, {}
+    Xu = np.asarray([feats[r.id][0] for r in unlabelled], dtype=float)
+    if len(set(y)) >= 2:
+        X, y = np.asarray(X, dtype=float), np.asarray(y)
+        groups = np.asarray([page_of[i] % FOLDS for i in ids])
+        if TEXT_MODEL:
+            # how lie-like the wording is, from a word-pattern model trained on the labels
+            # (out of fold for the training rows, like every other feature)
+            text_of = {r.id: r.text for r in rows}
+            tl = [text_of[i] for i in ids]
+            tu = [r.text for r in unlabelled]
+            X = np.hstack([X, _text_oof(tl, y, groups)[:, None]])
+            Xu = np.hstack([Xu, _text_fit(tl, y).predict(tu)[:, None]])
+        if STACK:
+            # second pass: lies cluster by page, so add how suspicious the OTHER rows of the
+            # row's page look to the first pass. Training rows' page-mates are in the same
+            # fold (folds go by page), so their first-pass scores are out-of-fold too.
+            p1 = _oof_pfalse(X, y, groups)
+            pu0 = _pfalse(_model().fit(X, y), Xu)
+            score = {**dict(zip(ids, p1)), **{r.id: p for r, p in zip(unlabelled, pu0)}}
+            X = np.hstack([X, _page_scores(ids, page_of, score)])
+            Xu = np.hstack([Xu, _page_scores([r.id for r in unlabelled], page_of, score)])
+        model = _model().fit(X, y)
+        proba = model.predict_proba(Xu)
+        classes = list(model.classes_)
+        pu = dict(zip([r.id for r in unlabelled], _pfalse(model, Xu)))
+    else:
+        proba = np.tile([PRIOR_TRUE, 1 - PRIOR_TRUE], (len(unlabelled), 1))
+        classes = ["true", "false"]
+        pu = {}
+    return proba, classes, feats, t, pu
 
 
 class _TextModel:
