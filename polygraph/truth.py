@@ -40,6 +40,7 @@ class Mention:
     key: str
     weight: float
     anchor: int  # +1 labelled true, -1 labelled false, 0 unlabelled
+    unsure: bool = False  # labelled unsure: the data itself can't tell
 
 
 @dataclass
@@ -104,8 +105,12 @@ def _steps(on_date: dict[str, str], ms: list[Mention]) -> list[Step]:
         agree = sum(1 for m in ms if m.date == d and m.key == k and m.anchor > -1)
         anchors = sum(1 for m in ms if m.date == d and m.key == k and m.anchor >= 1)
         dissent = sum(1 for m in ms if m.date == d and m.key != k and abs(m.anchor) < 1)
+        # real support on this date: a row that backs the value and isn't labelled unsure
+        real = any(m.date == d and m.key == k and m.anchor > -1 and not m.unsure for m in ms)
         if steps and value_key(steps[-1].value) == k:
             s = steps[-1]
+            if s.first_seen is None and real:
+                s.first_seen = d
             s.support += agree
             s.last_seen = d
             s.confidence = max(s.confidence, 1.0 if anchors else 0.0)
@@ -114,7 +119,8 @@ def _steps(on_date: dict[str, str], ms: list[Mention]) -> list[Step]:
             continue
         if steps:
             steps[-1].end = d
-        steps.append(Step(d, None, value_of[k], 1.0 if anchors else 0.0, agree, d, anchors, dissent))
+        steps.append(Step(d, None, value_of[k], 1.0 if anchors else 0.0, agree, d, anchors, dissent,
+                          d if real else None))
     for s in steps:  # confidence: anchored, or by how many mentions back it
         s.confidence = 1.0 if s.confidence == 1.0 else min(0.97, 0.55 + 0.1 * s.support)
     return steps
@@ -153,7 +159,7 @@ def _build(lexicon: Lexicon, rows: list[Row], facts: dict[str, list[Fact]], soft
             for r, f in items:
                 anchor = 1 if r.label == "true" else -1 if r.label == "false" else soft.get(r.id, 0.0)
                 ms.append(Mention(r.id, r.date, f.value, value_key(f.value),
-                                  trust[r.page] * f.score, anchor))
+                                  trust[r.page] * f.score, anchor, r.label == "unsure"))
             mentions[key] = ms
             on_date[key] = _fit_staircase(ms)
         # page trust from agreement of its unlabelled + labelled rows

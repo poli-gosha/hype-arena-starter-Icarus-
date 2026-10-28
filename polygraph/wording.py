@@ -17,6 +17,13 @@ ADJECTIVE_END = ("ed", "able", "ible")
 ADJECTIVES = {"available", "remote", "live", "profitable", "free", "open", "public", "anonymous", "carbon neutral"}
 
 
+def _a(word: str) -> str:
+    """The article for a word: "an uptime SLA", "a median time" (acronyms by their sound)."""
+    first = word.split()[0] if word else ""
+    vowel_sound = first[:1].lower() in "aeiou" or (first.isupper() and first[:1] in "AEFHILMNORSX")
+    return "an" if vowel_sound else "a"
+
+
 def words(attribute: str) -> str:
     """Attribute words with acronyms in capitals: `cto` -> CTO, `soc2_certified` -> SOC2 certified."""
     return " ".join(w.upper() if w in ACRONYMS else w for w in attribute_words(attribute).split())
@@ -51,7 +58,7 @@ def fact(subject: str, attribute: str, value: dict) -> list[str]:
     if kind == "money" and any(t in ("price", "cost") for t in toks) and len(toks) <= 2:
         out.append(f"{subject} costs {r}")
     if kind in ("percent", "duration"):
-        out.append(f"{subject} has a {w} of {r}")
+        out.append(f"{subject} has {_a(w)} {w} of {r}")
     out.append(f"The {w} of {subject} is {r}")
     return out
 

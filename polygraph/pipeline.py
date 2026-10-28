@@ -100,6 +100,7 @@ def run(rows: list[Row], lexicon: Lexicon, bundle: Bundle, *, claims: bool = Tru
     stages.append({"name": "judge", "ms": round(total - truth.TIMER["ms"], 1), "count": len(verdicts)})
 
     t = time.perf_counter()
+    kb.judged_false = {v.id for v in verdicts if v.label == "false"}  # the forge won't build on these
     out_claims = forge.generate(kb, {normalize_text(r.text) for r in rows}) if claims else []
     stages.append({"name": "forge", "ms": round((time.perf_counter() - t) * 1000, 1), "count": len(out_claims)})
 

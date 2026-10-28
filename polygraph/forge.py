@@ -15,7 +15,7 @@ from typing import Iterator
 
 from . import AS_OF
 from .kb import KB
-from .model import Claim, Step
+from .model import Claim, Step, same_value
 from .render import attribute_words, render
 from . import wording
 from .validate import has_time_word, normalize_text, validate
@@ -63,14 +63,29 @@ def _precise(kb: KB, key: tuple, v: dict) -> dict | None:
 def _covers(step: Step, day: str) -> bool:
     """Observations actually bracket the day: the stair was seen on or before it, and
     seen again (or replaced) on or after it."""
-    return step.start <= day and ((step.last_seen or step.start) >= day or (step.end is not None and day < step.end))
+    # from the first date a real row backs it: a row labelled unsure, or a date that only
+    # ruled out another value, doesn't stretch the stair back in time
+    start = step.first_seen or step.start
+    return start <= day and ((step.last_seen or step.start) >= day or (step.end is not None and day < step.end))
+
+
+def _propped_by_lies(kb: KB, key: tuple, step: Step) -> bool:
+    """The value's most recent support is a row judged (or labelled) false: an old value
+    kept alive by stale lies, while the row with the new value may have been missed."""
+    judged_false = getattr(kb, "judged_false", set())
+    backing = sorted((m for m in kb.mentions.get(key, []) if same_value(m["value"], step.value)),
+                     key=lambda m: m["date"])
+    if not backing:
+        return False
+    last = backing[-1]
+    return last["verdict"] == "false" or (last["verdict"] != "true" and last["row_id"] in judged_false)
 
 
 # ---- fact ------------------------------------------------------------------------------
 def fact_claims(kb: KB) -> Iterator[Claim]:
     for (subj, attr) in kb.facts():
         step = kb.current(subj, attr)
-        if step is None or not _words_ok(attr) or not _step_conf(step):
+        if step is None or not _words_ok(attr) or not _step_conf(step) or _propped_by_lies(kb, (subj, attr), step):
             continue
         v = _precise(kb, (subj, attr), step.value)
         if v is None or (v["kind"] == "boolean" and not step.anchors):
@@ -108,7 +123,8 @@ def compare_claims(kb: KB) -> Iterator[Claim]:
     groups: dict[tuple, list] = {}
     for (subj, attr) in kb.facts():
         step = kb.current(subj, attr)
-        if step is None or not _words_ok(attr, allow_digits=False) or not _step_conf(step):
+        if (step is None or not _words_ok(attr, allow_digits=False) or not _step_conf(step)
+                or _propped_by_lies(kb, (subj, attr), step)):
             continue
         a = _amount(step.value)
         if a is not None:

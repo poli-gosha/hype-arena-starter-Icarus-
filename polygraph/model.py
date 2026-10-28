@@ -51,6 +51,7 @@ class Step:
     # next step's start, we don't know exactly when the value changed
     anchors: int = 0  # how many labelled-true rows confirm it
     dissent: int = 0  # mentions on its dates that disagree (outvoted lies or slips)
+    first_seen: Optional[str] = None  # first date a real row (not one labelled unsure) supports it
 
 
 @dataclass
