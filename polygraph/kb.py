@@ -105,4 +105,6 @@ class KB:
                     points[key].append((r.date, f["value"]))
         for key, pts in points.items():
             kb.timelines[key] = cls.staircase(pts)
+            for st in kb.timelines[key]:  # every point is a labelled-true row: each confirms its step
+                st.anchors = st.support
         return kb
