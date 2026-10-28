@@ -42,7 +42,8 @@ STACK = os.environ.get("POLY_STACK", "1") == "1"  # the page-level second pass
 BAGS = int(os.environ.get("POLY_BAGS", 1))  # models averaged over bootstrap resamples
 SELF_TRAIN = os.environ.get("POLY_SELF", "1") == "1"  # self-training: confident verdicts as weak anchors
 SOFT = float(os.environ.get("POLY_SOFT", 0.6))  # how strong such a weak anchor is (a label is 1)
-SOFT_LO, SOFT_HI = 0.08, 0.85  # P(false) below / above which a verdict counts as confident
+SOFT_LO, SOFT_HI = 0.08, 0.85
+SELF_ROUNDS = int(os.environ.get("POLY_ROUNDS_SELF", 1))  # self-training passes  # P(false) below / above which a verdict counts as confident
 TEXT_MODEL = os.environ.get("POLY_TEXT", "0") == "1"  # a word-pattern model as a judge input (5-fold CV: no gain, off)
 PROBA: dict[str, dict] = {}  # last run's class probabilities per row (for analysis)
 STATUS = ["agrees", "stale", "premature", "invented", "unknown"]
@@ -377,8 +378,9 @@ def label(rows: list[Row], facts: dict[str, list[Fact]], lexicon: Lexicon,
     if SELF_TRAIN and unlabelled and len(classes) > 1:
         # self-training: confident first-pass verdicts become weak anchors for OTHER rows,
         # and everything is judged again (a row never sees its own guess)
-        soft = {rid: (SOFT if p < SOFT_LO else -SOFT) for rid, p in pu.items() if p < SOFT_LO or p > SOFT_HI}
-        proba, classes, feats, _, _ = _fit_predict(rows, facts, lexicon, extracted, ctx, labelled, unlabelled, soft)
+        for _ in range(SELF_ROUNDS):
+            soft = {rid: (SOFT if p < SOFT_LO else -SOFT) for rid, p in pu.items() if p < SOFT_LO or p > SOFT_HI}
+            proba, classes, feats, _, pu = _fit_predict(rows, facts, lexicon, extracted, ctx, labelled, unlabelled, soft)
     if not unlabelled:
         return [], t
     out = []

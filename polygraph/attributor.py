@@ -53,6 +53,26 @@ def attr_tokens(attribute: str) -> frozenset:
     return frozenset(singular(t) for t in attribute.split("_") if t and t not in STOP)
 
 
+@lru_cache(maxsize=100_000)
+def stem(word: str) -> str:
+    """A crude stem, so "trading" meets "trade" and "arrived" meets "arrive"."""
+    w = word.lower()
+    for suf in ("ing", "ed", "es", "s"):
+        if w.endswith(suf) and len(w) - len(suf) >= 3:
+            w = w[: -len(suf)]
+            break
+    return w.rstrip("e")
+
+
+def stems(text: str) -> set[str]:
+    return {stem(p) for w in WORD_RE.findall(text) for p in re.split(r"[-'’]", w) if len(p) > 1 and p.lower() not in STOP}
+
+
+@lru_cache(maxsize=20_000)
+def attr_stems(attribute: str) -> frozenset:
+    return frozenset(stem(t) for t in attribute.split("_") if t and t not in STOP and len(t) > 1)
+
+
 def unit_of(v: dict) -> str:
     k = v.get("kind")
     if k == "quantity":
@@ -67,6 +87,14 @@ def unit_of(v: dict) -> str:
 
 
 GLOBAL_K = 4  # lexicon-wide candidates per value, for sentences whose subject the page never names
+
+
+def _blank(text: str, spans) -> str:
+    chars = list(text)
+    for a, b in spans:
+        for i in range(max(0, a), min(len(chars), b)):
+            chars[i] = " "
+    return "".join(chars)
 
 
 class Attributor:
@@ -221,11 +249,17 @@ class Attributor:
         on_page = {m.subject for m in subjects}
         cands, feats = [], []
         squashed = re.sub(r"[^a-z0-9]", "", row.text.lower())
+        text_stems = stems(_blank(row.text, skip))
         for reading in self._readings(row, values, mentions):
             if reading[0]["kind"] == "boolean":  # a yes/no is the whole sentence: every word is context
                 win = self._window(row.text, 0, 0, skip, whole=True)
+                near = win
             else:
                 win = self._window(row.text, reading[1], reading[2], skip)
+                # the few words right before the value: "announced on <date>", "planned for <date>"
+                near = [singular(w) for w in WORD_RE.findall(_blank(row.text, skip)[: reading[1]])[-3:]
+                        if w.lower() not in STOP]
+            win_stems = {stem(w) for w in win}
             pairs = [(s, a) for s in subjects for a in self.lexicon.attributes(s.subject)]
             pairs += [(Mention(s, -1, -1, "", 99, 0, False, False), a) for s, a in self._global(reading, win, on_page)]
             for s, a in pairs:
@@ -234,7 +268,10 @@ class Attributor:
                 cands.append((reading, s.subject, a))
                 # the attribute's own words in the sentence: "SOC 2 certified" for soc2_certified
                 phrase = a.replace("_", "")
-                feats.append(self._features(row, reading, s, a, mentions, win) + [float(len(phrase) > 3 and phrase in squashed)])
+                ast = attr_stems(a)
+                feats.append(self._features(row, reading, s, a, mentions, win)
+                             + [float(len(phrase) > 3 and phrase in squashed), self._cue(a, near),
+                                len(ast & text_stems) / max(1, len(ast)), len(ast & win_stems) / max(1, len(ast))])
         return cands, feats
 
     # ---- training --------------------------------------------------------------------
@@ -318,17 +355,26 @@ class Attributor:
             # a yes/no reading spans the whole sentence: its attributes compete like a value's
             sk = (i, reading[1], reading[2]) if reading[0]["kind"] != "boolean" else (i, "bool")
             spans[sk].append((float(prob), reading, s, a))
-        chosen: dict[tuple, tuple] = {}
+        # every candidate's score: its probability, tempered by how clearly it beats the
+        # other candidates for the same value (near-twin attributes split the probability)
+        scored = []
         for sk, cs in spans.items():
             cs.sort(key=lambda c: -c[0])
-            top = cs[0]
-            share = top[0] / (sum(c[0] for c in cs[:4]) + 1e-9)
-            score = top[0] ** 0.5 * share ** 0.5
+            total = sum(c[0] for c in cs[:4]) + 1e-9
+            for prob, reading, s_, a in cs[:6]:
+                scored.append(((prob * prob / total) ** 0.5, sk, reading, s_, a))
+        # greedy assignment: best pairs first; a value takes one fact, a fact one value per
+        # sentence, so a second date falls back to its next-best attribute instead of vanishing
+        scored.sort(key=lambda x: -x[0])
+        used_span, chosen = set(), {}
+        for score, sk, reading, s_, a in scored:
             if score < threshold:
+                break
+            k = (sk[0], s_, a)
+            if sk in used_span or k in chosen:
                 continue
-            k = (sk[0], top[2], top[3])
-            if k not in chosen or score > chosen[k][0]:
-                chosen[k] = (score, top[1], top[2], top[3])
+            used_span.add(sk)
+            chosen[k] = (score, reading, s_, a)
         for (i, s, a), (score, reading, _, _) in chosen.items():
             out[i].append(Fact(s, a, reading[0], (reading[1], reading[2]), score))
         return out
