@@ -335,7 +335,16 @@ class Attributor:
     def assign(self, row: Row, values: list[ValueSpan], mentions: list[Mention]) -> list[Fact]:
         return self.assign_many([(row, values, mentions)])[0]
 
-    def assign_many(self, items) -> list[list[Fact]]:
+    def assign_many(self, items, batch: int = 2000) -> list[list[Fact]]:
+        """Facts for many rows, in batches: every row is decided on its own, so batching
+        changes nothing but the peak memory (the candidate table of 17,000 rows at once
+        would take gigabytes)."""
+        items = list(items)
+        if len(items) > batch:
+            out = []
+            for i in range(0, len(items), batch):
+                out += self.assign_many(items[i:i + batch], batch)
+            return out
         all_c, all_x, owner = [], [], []
         for i, (row, values, mentions) in enumerate(items):
             c, x = self._candidates(row, values, mentions)

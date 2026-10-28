@@ -39,6 +39,7 @@ On Mac/Linux, run `sh scripts/setup.sh` instead. Setup creates `.venv`, installs
 | `python scripts/eval_labels.py` | Label accuracy over all 5 folds (cached extraction: seconds per run) |
 | `python scripts/eval_claims.py` | The 1,000 claims: valid (referee clone) and true (gold knowledge base) |
 | `sh scripts/check_windows.sh` | The official Docker check from Git Bash on Windows |
+| `sh scripts/stress_windows.sh` | The 20,000-row test in Docker with the judges' limits: prints time, peak memory and PASSED/FAILED |
 
 With Docker installed, `sh scripts/check.sh` runs the official check (from Git Bash).
 
