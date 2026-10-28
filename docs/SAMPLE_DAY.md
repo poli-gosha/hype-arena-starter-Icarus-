@@ -28,7 +28,8 @@ It must end with `the format checks pass`, and `out/output/output.csv` must hold
 
 ## 09:15: record the video (deadline 11:00)
 
-1. In the UI, click **Load sample**, then **Run**. It takes about 4 seconds; the diagram lights up and every row gets its verdict.
+1. Open http://localhost:8000 for the story of one statement (scroll through it), then click **Run it live** (http://localhost:8000/console.html).
+2. In the console, click **Load sample.csv**, then **Run polygraph**. It takes about 4 seconds; the diagram lights up and every row gets its verdict.
 2. Click two or three FALSE rows to show the evidence board. Each one has a timeline and a one-line "why".
 3. Show the **Claim Forge** tab: the 1,000 claims and their types.
 4. Keep the architecture diagram on screen throughout. The rules require it beside the run.

@@ -1,374 +1,848 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Polygraph · Team Icarus</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;600;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="vendor/three.min.js"></script>
 <style>
+  /* QA DNA palette */
   :root {
-    --bg: #07080a; --panel: #0e1014; --panel2: #13161c; --line: #232833; --text: #d9dee8; --dim: #7c8596;
-    --true: #39ff88; --false: #ff3b5c; --unsure: #ffb020; --accent: #59c3ff;
-    --mono: "JetBrains Mono", "IBM Plex Mono", Consolas, "SF Mono", Menlo, monospace;
+    --bg: #0A0A0A; --ink: #FCFCFC; --lime: #D7F13B; --slate: #3D4350; --blue: #4F86F7;
+    --red: #FF4D5E; --amber: #FFB020; --dim: #8A90A0;
+    --head: "Figtree", system-ui, sans-serif; --mono: "JetBrains Mono", ui-monospace, monospace;
   }
-  * { box-sizing: border-box; }
-  html, body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--mono); font-size: 14px; }
-  body::after { /* faint scanlines */
-    content: ""; position: fixed; inset: 0; pointer-events: none;
-    background: repeating-linear-gradient(0deg, rgba(255,255,255,.018) 0 1px, transparent 1px 3px);
+  * { box-sizing: border-box; -webkit-font-smoothing: antialiased; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--head); }
+  ::-webkit-scrollbar { width: 0; background: transparent; }
+
+  /* the particle universe, behind everything */
+  #webgl { position: fixed; inset: 0; z-index: 1; pointer-events: none; }
+  #grain { position: fixed; inset: 0; z-index: 10; pointer-events: none; mix-blend-mode: overlay; opacity: .14; }
+  .vignette { position: fixed; inset: 0; z-index: 5; pointer-events: none;
+    background: radial-gradient(circle at 50% 50%, transparent 46%, rgba(3,3,4,.85) 100%); }
+
+  /* the marker that follows Exhibit A in the galaxy */
+  #marker { position: fixed; z-index: 15; pointer-events: none; transform: translate(-50%, -50%); transition: opacity .4s; }
+  #marker .ring { width: 38px; height: 38px; border: 1.5px solid var(--lime); border-radius: 50%;
+    box-shadow: 0 0 18px rgba(215,241,59,.6); animation: pulse 1.8s ease-in-out infinite; }
+  #marker .tag { position: absolute; left: 34px; top: -22px; white-space: nowrap; font: 500 11px var(--mono);
+    letter-spacing: .14em; color: var(--lime); }
+  #marker .tag::before { content: ""; position: absolute; left: -16px; top: 14px; width: 14px; height: 1px; background: var(--lime); }
+  @keyframes pulse { 0%,100% { transform: scale(1); opacity: 1 } 50% { transform: scale(1.35); opacity: .55 } }
+
+  /* fixed HUD */
+  .brand { position: fixed; top: 22px; left: 26px; z-index: 30; font: 500 11px var(--mono); letter-spacing: .2em; color: var(--dim); }
+  .brand b { color: var(--lime); font-weight: 500; }
+  .step-now { position: fixed; bottom: 24px; left: 26px; z-index: 30; font: 500 11px var(--mono); letter-spacing: .16em; color: var(--dim); }
+  .step-now span { color: var(--ink); }
+  .live-link { position: fixed; top: 16px; right: 22px; z-index: 30; font: 600 13px var(--head); color: #0A0A0A;
+    background: var(--lime); border-radius: 999px; padding: 9px 16px; text-decoration: none; }
+  .live-link:hover { filter: brightness(1.08); }
+  .rail { position: fixed; right: 26px; top: 50%; transform: translateY(-50%); z-index: 30; display: flex; gap: 12px; align-items: center; }
+  .dots { display: flex; flex-direction: column; justify-content: space-between; height: 240px; }
+  .dot { width: 6px; height: 6px; border-radius: 99px; background: rgba(252,252,252,.22); border: 0; padding: 0; cursor: pointer;
+    position: relative; transition: all .35s cubic-bezier(.16,1,.3,1); }
+  .dot.on { background: var(--lime); transform: scale(1.6); box-shadow: 0 0 10px rgba(215,241,59,.8); }
+  .dot span { position: absolute; right: 16px; top: 50%; transform: translateY(-50%); white-space: nowrap; font: 500 10px var(--mono);
+    letter-spacing: .12em; color: var(--dim); opacity: 0; transition: opacity .25s; pointer-events: none; }
+  .dot:hover span, .dot.on span { opacity: 1; }
+  .track { width: 2px; height: 240px; background: rgba(255,255,255,.08); position: relative; overflow: hidden; }
+  #bar { width: 100%; height: 0; background: var(--lime); }
+
+  /* the scroll story */
+  main { position: relative; z-index: 20; }
+  section { position: relative; min-height: 100vh; display: flex; }
+  .scene { min-height: 90vh; align-items: flex-end; padding: 0 0 12vh 7vw; pointer-events: none; }
+  .scene .cap { max-width: 520px; }
+  .slide { min-height: 125vh; align-items: center; padding: 0 7vw;
+    background: radial-gradient(ellipse at 30% 50%, rgba(10,10,10,.78) 0%, rgba(10,10,10,.45) 55%, rgba(10,10,10,0) 100%); }
+  .slide .body { max-width: 640px; }
+  .kicker { font: 500 12px var(--mono); letter-spacing: .2em; color: var(--lime); text-transform: uppercase; margin-bottom: 18px; }
+  .kicker.red { color: var(--red); } .kicker.blue { color: var(--blue); }
+  h1 { font-weight: 800; font-size: clamp(48px, 8vw, 120px); line-height: .95; letter-spacing: -.03em; margin: 0 0 22px; }
+  h1 .lie { color: var(--red); } h1 .truth { color: var(--lime); }
+  h2 { font-weight: 800; font-size: clamp(36px, 5.2vw, 76px); line-height: 1.02; letter-spacing: -.02em; margin: 0 0 24px; }
+  h3 { font-weight: 800; font-size: clamp(22px, 2.4vw, 32px); margin: 0 0 8px; }
+  p { font-size: clamp(17px, 1.45vw, 21px); line-height: 1.6; color: #D6D8DD; margin: 0 0 16px; }
+  p em { color: var(--ink); font-style: normal; font-weight: 600; }
+  .mono { font-family: var(--mono); font-size: .86em; color: var(--lime); }
+  .cap p { font-size: 15px; color: var(--dim); }
+  .hero { min-height: 100vh; align-items: center; padding: 0 7vw; pointer-events: none; }
+  .hero .scroll { margin-top: 40px; font: 500 11px var(--mono); letter-spacing: .2em; color: var(--dim); display: flex; gap: 12px; align-items: center; }
+  .hero .scroll i { display: block; width: 1px; height: 46px; background: linear-gradient(var(--lime), transparent); animation: drop 1.8s infinite; }
+  @keyframes drop { 0% { transform: scaleY(0); transform-origin: top } 50% { transform: scaleY(1); transform-origin: top } 51% { transform-origin: bottom } 100% { transform: scaleY(0); transform-origin: bottom } }
+
+  /* reveal on scroll */
+  .reveal { opacity: 0; transform: translateY(28px); transition: opacity .9s cubic-bezier(.16,1,.3,1), transform .9s cubic-bezier(.16,1,.3,1); }
+  .in .reveal { opacity: 1; transform: none; }
+  .in .reveal:nth-child(2) { transition-delay: .08s } .in .reveal:nth-child(3) { transition-delay: .16s }
+  .in .reveal:nth-child(4) { transition-delay: .24s } .in .reveal:nth-child(5) { transition-delay: .32s }
+
+  /* the ending */
+  .finale { min-height: 100vh; flex-direction: column; justify-content: center; padding: 14vh 7vw 10vh;
+    background: linear-gradient(rgba(10,10,10,0), rgba(10,10,10,.92) 22%); }
+  .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin: 34px 0 42px; max-width: 1180px; }
+  .stat { border: 1px solid rgba(252,252,252,.1); background: rgba(21,23,28,.85); border-radius: 14px; padding: 22px; }
+  .stat b { display: block; font-size: clamp(30px, 3.2vw, 46px); font-weight: 800; color: var(--lime); letter-spacing: -.02em; }
+  .stat span { display: block; margin-top: 4px; font-size: 15px; color: var(--ink); }
+  .stat small { display: block; margin-top: 6px; font: 400 11.5px var(--mono); color: var(--dim); }
+  .pipe { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 40px; max-width: 1180px; }
+  .pipe div { border: 1px solid rgba(79,134,247,.5); border-radius: 10px; padding: 10px 14px; font: 500 12px var(--mono); color: var(--ink); }
+  .pipe div i { font-style: normal; color: var(--lime); margin-right: 8px; }
+  .cta { display: inline-flex; gap: 12px; align-items: center; background: var(--lime); color: #0A0A0A; font-weight: 800; font-size: 18px;
+    padding: 16px 28px; border-radius: 999px; text-decoration: none; width: fit-content; }
+  .cta:hover { filter: brightness(1.08); }
+  footer { margin-top: 60px; font: 400 12px var(--mono); color: var(--dim); letter-spacing: .08em; }
+
+  /* the shape controls, from the original GRAIN panel (collapsed) */
+  .fx { position: fixed; bottom: 18px; right: 22px; z-index: 30; width: 230px; font: 500 10px var(--mono); letter-spacing: .1em;
+    text-transform: uppercase; color: var(--dim); }
+  .fx button.toggle { width: 100%; background: rgba(10,10,14,.72); backdrop-filter: blur(16px); border: 1px solid rgba(252,252,252,.09);
+    border-radius: 8px; color: var(--dim); font: inherit; padding: 8px 12px; cursor: pointer; text-align: left; }
+  .fx .panel { display: none; margin-top: 6px; padding: 12px; background: rgba(10,10,14,.82); backdrop-filter: blur(16px);
+    border: 1px solid rgba(252,252,252,.09); border-radius: 8px; }
+  .fx.open .panel { display: block; }
+  .fx label { display: flex; justify-content: space-between; margin: 8px 0 4px; }
+  .fx input { width: 100%; accent-color: var(--lime); }
+
+  @media (max-width: 860px) {
+    .brand span { display: none; }
+    .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .rail, .fx { display: none; }
+    .scene { padding-left: 6vw; padding-right: 6vw; }
   }
-  header { display: flex; align-items: center; gap: 16px; padding: 14px 22px; border-bottom: 1px solid var(--line); }
-  .logo { font-weight: 700; letter-spacing: .18em; font-size: 18px; }
-  .logo b { color: var(--false); } .logo i { color: var(--true); font-style: normal; }
-  .tag { color: var(--dim); font-size: 12px; }
-  .status { margin-left: auto; font-size: 12px; color: var(--dim); display: flex; align-items: center; gap: 8px; }
-  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--unsure); box-shadow: 0 0 8px var(--unsure); }
-  .dot.ok { background: var(--true); box-shadow: 0 0 8px var(--true); }
-  nav { display: flex; gap: 4px; padding: 0 22px; border-bottom: 1px solid var(--line); }
-  nav button { background: none; border: 0; color: var(--dim); font: inherit; padding: 12px 14px; cursor: pointer; border-bottom: 2px solid transparent; }
-  nav button.on { color: var(--text); border-bottom-color: var(--accent); }
-  main { padding: 18px 22px 40px; max-width: 1500px; margin: 0 auto; }
-  section { display: none; } section.on { display: block; }
-  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
-  h2 { font-size: 12px; letter-spacing: .14em; color: var(--dim); font-weight: 600; margin: 0 0 12px; text-transform: uppercase; }
-
-  /* architecture diagram */
-  #diagram svg { width: 100%; height: auto; display: block; }
-  .node rect { fill: var(--panel2); stroke: var(--line); stroke-width: 1.2; rx: 10; transition: all .35s; }
-  .node.lit rect { stroke: var(--accent); fill: #10202c; filter: drop-shadow(0 0 8px rgba(89,195,255,.55)); }
-  .node.done rect { stroke: #2d6a4f; }
-  .node .t { fill: var(--text); font-size: 13px; font-weight: 700; }
-  .node .s { fill: var(--dim); font-size: 10.5px; }
-  .node .m { fill: var(--accent); font-size: 11px; }
-  .edge { stroke: var(--line); stroke-width: 2; fill: none; }
-  .edge.lit { stroke: var(--accent); stroke-dasharray: 6 6; animation: flow .6s linear infinite; }
-  @keyframes flow { to { stroke-dashoffset: -12; } }
-
-  .grid { display: grid; grid-template-columns: 380px 1fr; gap: 16px; margin-top: 16px; }
-  @media (max-width: 1000px) { .grid { grid-template-columns: 1fr; } }
-  textarea { width: 100%; min-height: 230px; background: var(--bg); color: var(--text); border: 1px solid var(--line);
-    border-radius: 8px; padding: 10px; font: 12px/1.5 var(--mono); resize: vertical; }
-  .btns { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
-  .btn { background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 9px 14px;
-    font: inherit; cursor: pointer; }
-  .btn:hover { border-color: var(--accent); }
-  .btn.go { background: var(--accent); color: #031018; border-color: var(--accent); font-weight: 700; }
-  .btn:disabled { opacity: .5; cursor: wait; }
-  .hint { color: var(--dim); font-size: 11.5px; margin-top: 8px; line-height: 1.5; }
-  .summary { display: flex; gap: 18px; margin-bottom: 12px; font-size: 13px; color: var(--dim); flex-wrap: wrap; }
-  .summary b { font-size: 20px; margin-right: 6px; }
-
-  /* verdict rows */
-  .row { display: grid; grid-template-columns: 112px 1fr 120px; gap: 14px; align-items: center; padding: 12px;
-    border: 1px solid var(--line); border-radius: 10px; margin-bottom: 8px; background: var(--panel2); cursor: pointer; }
-  .row:hover { border-color: #3a4252; }
-  .row.sel { border-color: var(--accent); }
-  .stamp { font-weight: 800; letter-spacing: .12em; font-size: 15px; text-align: center; padding: 6px 4px; border: 2px solid;
-    border-radius: 6px; transform: rotate(-4deg); }
-  .stamp.true { color: var(--true); border-color: var(--true); text-shadow: 0 0 8px rgba(57,255,136,.6); }
-  .stamp.false { color: var(--false); border-color: var(--false); text-shadow: 0 0 8px rgba(255,59,92,.6); }
-  .stamp.unsure { color: var(--unsure); border-color: var(--unsure); }
-  .stamp.wait { color: var(--dim); border-color: var(--line); transform: none; }
-  .txt { font-size: 13.5px; line-height: 1.45; }
-  .txt .d { color: var(--dim); font-size: 11px; margin-right: 8px; }
-  .why { color: var(--dim); font-size: 11.5px; margin-top: 4px; }
-  .chips { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 5px; }
-  .chip { font-size: 10.5px; padding: 2px 7px; border-radius: 99px; border: 1px solid var(--line); color: var(--dim); }
-  .chip.agrees { color: var(--true); border-color: rgba(57,255,136,.4); }
-  .chip.stale, .chip.premature, .chip.invented { color: var(--false); border-color: rgba(255,59,92,.45); }
-  .gauge { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; margin-top: 6px; }
-  .gauge i { display: block; height: 100%; }
-  .conf { text-align: right; font-size: 12px; color: var(--dim); }
-  .conf b { font-size: 18px; color: var(--text); }
-  .needle { height: 26px; }
-
-  /* evidence */
-  #evidence .fact { margin-bottom: 18px; }
-  #evidence .fact h3 { font-size: 13px; margin: 0 0 4px; }
-  #evidence .fact p { margin: 0 0 6px; color: var(--dim); font-size: 12px; }
-  .tl svg { width: 100%; height: auto; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; }
-  .legend { display: flex; gap: 14px; font-size: 11px; color: var(--dim); margin-top: 6px; flex-wrap: wrap; }
-  .legend span::before { content: "●"; margin-right: 5px; }
-  .legend .lt::before { color: var(--true); } .legend .lf::before { color: var(--false); }
-  .legend .lu::before { color: #8a93a6; } .legend .lr::before { color: var(--accent); }
-
-  /* claims */
-  .filters { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
-  .filters button.on { border-color: var(--accent); color: var(--accent); }
-  .claim { padding: 10px 12px; border-bottom: 1px solid var(--line); display: grid; grid-template-columns: 86px 1fr 60px; gap: 12px; align-items: baseline; }
-  .claim .ty { font-size: 11px; color: var(--accent); text-transform: uppercase; letter-spacing: .08em; }
-  .claim .src { color: var(--dim); font-size: 11px; margin-top: 3px; }
-  .claim .c { text-align: right; color: var(--true); }
-  .empty { color: var(--dim); padding: 30px; text-align: center; }
-  .principles { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin-top: 16px; }
-  .principles .card p { color: var(--dim); line-height: 1.55; margin: 0; font-size: 12.5px; }
-  .principles .card h3 { margin: 0 0 6px; font-size: 13px; }
 </style>
 </head>
 <body>
-<header>
-  <div class="logo"><b>HYPE</b> ⁄ <i>TRUTH</i> · POLYGRAPH</div>
-  <div class="tag">Team Icarus · a lie detector for Hooly · no LLM at run time</div>
-  <div class="status"><span class="dot" id="dot"></span><span id="statusText">connecting…</span></div>
-</header>
-<nav>
-  <button class="on" data-tab="run">Live run</button>
-  <button data-tab="claims">Claim forge</button>
-  <button data-tab="how">How it works</button>
-</nav>
-<main>
-  <div class="card" id="diagram"><h2>Architecture · the system as it runs</h2><div id="svgwrap"></div></div>
+<div id="webgl"></div>
+<div class="vignette"></div>
+<canvas id="grain"></canvas>
+<div id="marker"><div class="ring"></div><div class="tag">EXHIBIT A · 8 SEP 2026</div></div>
 
-  <section class="on" id="tab-run">
-    <div class="grid">
-      <div class="card">
-        <h2>Rows to judge</h2>
-        <textarea id="input" spellcheck="false" placeholder="One row per line:  date | sentence&#10;2026-09-08 | Hooly Jules works in 8 languages."></textarea>
-        <div class="btns">
-          <button class="btn" id="loadSample">Load sample.csv</button>
-          <button class="btn" id="loadDemo">Load demo rows</button>
-          <button class="btn go" id="runBtn">▶ Run polygraph</button>
-        </div>
-        <div class="hint">Each row is judged against a year of Hooly's pages: 1,900 labelled practice rows and their timelines. Click a verdict to see the evidence.</div>
-      </div>
-      <div>
-        <div class="card">
-          <h2>Verdicts</h2>
-          <div class="summary" id="summary"></div>
-          <div id="rows"><div class="empty">Load rows and press Run.</div></div>
-        </div>
-        <div class="card" id="evidence" style="margin-top:16px"><h2>Evidence board</h2><div id="evBody" class="empty">Click a verdict.</div></div>
-      </div>
+<div class="brand"><b>POLYGRAPH</b><span> · TEAM ICARUS · HYPE OR TRUTH</span></div>
+<a class="live-link" href="console.html">Run it live →</a>
+<div class="step-now" id="stepNow">00 / <span>THE UNIVERSE</span></div>
+<div class="rail"><div class="dots" id="dots"></div><div class="track"><div id="bar"></div></div></div>
+
+<main id="story">
+  <!-- 0: the universe -->
+  <section class="hero scene" data-scene="0">
+    <div class="cap" style="max-width:760px">
+      <div class="kicker reveal">Hooly · one year · 20,000 sentences</div>
+      <h1 class="reveal">Hype or <span class="truth">truth</span>?</h1>
+      <p class="reveal">Press releases, blog posts, decks, a CEO named Gavin. Somewhere in this universe, some of it is
+        <em style="color:var(--red)">not true</em>. We built a system that finds it, without an LLM, and explains every verdict.</p>
+      <div class="scroll reveal"><i></i>FOLLOW ONE SENTENCE</div>
     </div>
   </section>
 
-  <section id="tab-claims">
-    <div class="card" style="margin-top:16px">
-      <h2>1,000 new claims · each one read back by our referee clone</h2>
-      <div class="filters" id="filters"></div>
-      <div id="claims" class="empty">Loading claims… (the first time takes about a minute)</div>
+  <section class="slide">
+    <div class="body">
+      <div class="kicker reveal">The case</div>
+      <h2 class="reveal">Every dot is a sentence Hooly published.</h2>
+      <p class="reveal">About 20,000 of them, dated across a year. Prices change, teams grow, products ship, and some pages
+        repeat old numbers, jump the gun, or simply make things up.</p>
+      <p class="reveal">One dot is shining. It's <em>Exhibit A</em>. Let's follow it all the way to its verdict.</p>
     </div>
   </section>
 
-  <section id="tab-how">
-    <div class="principles" id="principles"></div>
+  <!-- 1: the statement -->
+  <section class="scene" data-scene="1">
+    <div class="cap reveal"><div class="kicker">Exhibit A</div><h3>The statement</h3>
+      <p>Published on a Hooly page dated 8 September 2026.</p></div>
+  </section>
+
+  <section class="slide">
+    <div class="body">
+      <div class="kicker reveal">01 Linker · 02 Reader · 03 Attributor</div>
+      <h2 class="reveal">First, read it like the referee.</h2>
+      <p class="reveal">A sentence is a bundle of <em>facts</em>. The linker finds who it's about, <span class="mono">Hooly Jules</span>,
+        from Hooly's own list of names. The reader reads the value, <span class="mono">8 languages</span>, exactly by the
+        organisers' published rules.</p>
+      <p class="reveal">Then a model trained on 2,400 labelled facts decides which fact the value belongs to:
+        <span class="mono">programming languages</span>, on <span class="mono">8 Sep 2026</span>.</p>
+    </div>
+  </section>
+
+  <!-- 2: the fact -->
+  <section class="scene" data-scene="2">
+    <div class="cap reveal"><div class="kicker blue">Sentence → fact</div><h3>Who · what · which value · when</h3>
+      <p>Four parts, one fact. Every one of the 20,000 sentences goes through this.</p></div>
+  </section>
+
+  <section class="slide">
+    <div class="body">
+      <div class="kicker reveal">The machine</div>
+      <h2 class="reveal">Seven stages. No neural network. No LLM.</h2>
+      <p class="reveal">Rules, timelines, dynamic programming and two small models trained on the 1,900 labelled practice rows.
+        Everything runs offline: 20,000 sentences in about three and a half minutes, on two CPUs.</p>
+      <p class="reveal">Which means every verdict can be traced back to its evidence.</p>
+    </div>
+  </section>
+
+  <!-- 3: the thread through the gates -->
+  <section class="scene" data-scene="3">
+    <div class="cap reveal"><div class="kicker">The pipeline</div><h3>One thread, seven gates</h3>
+      <p>Linker · Reader · Attributor · Truth engine · Judge · Claim forge · Writer</p></div>
+  </section>
+
+  <section class="slide">
+    <div class="body">
+      <div class="kicker reveal">04 Truth engine</div>
+      <h2 class="reveal">Truth has a timeline.</h2>
+      <p class="reveal">Every other page that mentions Jules's languages lands on one timeline. We fit the most likely
+        <em>staircase</em> through them: a lone wrong value is outvoted, a real change, repeated by later pages, becomes a new step.</p>
+      <p class="reveal">Pages earn trust as they go: a rumour page counts less than a release note, and the timelines are refit.</p>
+    </div>
+  </section>
+
+  <!-- 4: the staircase -->
+  <section class="scene" data-scene="4">
+    <div class="cap reveal"><div class="kicker">Hooly Jules · programming languages</div><h3>8 languages, then 14 from August</h3>
+      <p>Green: the truth over time. Red: lies. Blue: Exhibit A, still saying 8 in September.</p></div>
+  </section>
+
+  <section class="slide">
+    <div class="body">
+      <div class="kicker reveal">05 Judge</div>
+      <h2 class="reveal">Weigh the evidence.</h2>
+      <p class="reveal">Does the value sit on its staircase on its date? Was it true <em>before</em> (stale), only <em>later</em>
+        (premature), or <em>never</em> (invented)? How many pages agree? Does a confirmed row nearby disagree?</p>
+      <p class="reveal">A forest of decision trees weighs it all. It learned from the labelled rows without ever seeing a row's own label,
+        exactly as it will judge a new one.</p>
+    </div>
+  </section>
+
+  <!-- 5: the forest -->
+  <section class="scene" data-scene="5">
+    <div class="cap reveal"><div class="kicker">The judge</div><h3>A forest of decision trees votes</h3>
+      <p>Then confident verdicts sharpen the other timelines, and it judges again.</p></div>
+  </section>
+
+  <section class="slide">
+    <div class="body">
+      <div class="kicker red reveal">The verdict</div>
+      <h2 class="reveal">8 languages held until August.<br>On 8 September, it's 14.</h2>
+      <p class="reveal">Exhibit A repeats a value that <em>was</em> true, but no longer is on its own date. A stale value.</p>
+    </div>
+  </section>
+
+  <!-- 6: FALSE -->
+  <section class="scene" data-scene="6">
+    <div class="cap reveal"><div class="kicker red">Exhibit A</div><h3>False · stale · 97% sure</h3>
+      <p>Every verdict comes with its reason and how sure we are.</p></div>
+  </section>
+
+  <section class="slide">
+    <div class="body">
+      <div class="kicker reveal">06 Claim forge</div>
+      <h2 class="reveal">And then, the other way round.</h2>
+      <p class="reveal">From timeline steps that confirmed rows back up, the forge writes 1,000 new claims:
+        <span class="mono">Hooly Cloud has 8 regions.</span> <span class="mono">Hooly Workspace costs more than Hooly AI Pro.</span>
+        <span class="mono">The CTO of Hooly joined on 1 July 2026.</span></p>
+      <p class="reveal">Our own copy of the referee reads every one back. Anything it would reject never ships.</p>
+    </div>
+  </section>
+
+  <!-- 7: the new universe -->
+  <section class="scene" data-scene="7">
+    <div class="cap reveal"><div class="kicker">A new universe</div><h3>1,000 claims, each one checked</h3>
+      <p>Every bright star is a statement the system can stand behind.</p></div>
+  </section>
+
+  <section class="finale">
+    <div class="kicker reveal">Measured on held-out practice data</div>
+    <h2 class="reveal">Polygraph. Every verdict comes with its evidence.</h2>
+    <div class="stats">
+      <div class="stat reveal"><b>0.879</b><span>label accuracy</span><small>vs 0.833 for “everything is true”</small></div>
+      <div class="stat reveal"><b>992 / 1,000</b><span>claims verified true</span><small>0 rejected by the referee clone</small></div>
+      <div class="stat reveal"><b>3.5 min</b><span>for 20,000 sentences</span><small>of 30 allowed · 0.8 GiB of 6</small></div>
+      <div class="stat reveal"><b>0</b><span>LLMs at run time</span><small>rules · timelines · two small models</small></div>
+    </div>
+    <div class="pipe reveal">
+      <div><i>1</i>Linker</div><div><i>2</i>Reader</div><div><i>3</i>Attributor</div><div><i>4</i>Truth engine</div>
+      <div><i>5</i>Judge</div><div><i>6</i>Claim forge</div><div><i>7</i>Writer</div>
+    </div>
+    <a class="cta reveal" href="console.html">Run Polygraph live on the sample →</a>
+    <footer class="reveal">TEAM ICARUS · HYPE OR TRUTH · QA DNA CHALLENGE · NEXXT AI HACKATHON 2026</footer>
   </section>
 </main>
 
+<div class="fx" id="fx">
+  <button class="toggle" id="fxToggle">Grain · params [ + ]</button>
+  <div class="panel">
+    <label>Grain <span id="vGrain">0.55</span></label><input id="cGrain" type="range" min="0" max="100" value="55">
+    <label>Density <span id="vDensity">100%</span></label><input id="cDensity" type="range" min="15" max="100" value="100">
+    <label>Point size <span id="vSize">1.30</span></label><input id="cSize" type="range" min="40" max="280" value="130">
+    <label>Dispersion <span id="vCurl">0.55</span></label><input id="cCurl" type="range" min="0" max="150" value="55">
+    <label>Glow <span id="vGlow">0.70</span></label><input id="cGlow" type="range" min="0" max="100" value="70">
+  </div>
+</div>
+
 <script>
-const API = "";
-const STAGES = [
-  { id: "linker", name: "Linker", sub: "which Hooly subjects" },
-  { id: "reader", name: "Reader", sub: "values, as the referee reads" },
-  { id: "attributor", name: "Attributor", sub: "trained: value → fact" },
-  { id: "truth", name: "Truth engine", sub: "timelines × page trust" },
-  { id: "judge", name: "Judge", sub: "trained: true / false / unsure" },
-  { id: "forge", name: "Claim forge", sub: "1,000 true claims" },
-];
-const DEMO = [
-  "2026-09-08 | Hooly Jules works in 8 languages.",
-  "2026-10-20 | Hooly AI Pro costs €59 per month.",
-  "2026-06-10 | Gavin: Hooly Gemini speaks 40 languages, which is more than any competitor.",
-  "2025-11-14 | Hooly Gemini handles 22 formats.",
-  "2026-10-26 | Hooly Gemini scored 99.6% last quarter",
-  "2026-06-26 | Its inner screen is 8 inch, and the battery of Hooly Pixel Fold is 4,700 mAh.",
-];
-const $ = (s) => document.querySelector(s);
-const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+/* ============================================================================
+   POLYGRAPH: the journey of one statement, from a universe of sentences to its
+   verdict. Particle engine after the team's GRAIN skeleton: one cloud of
+   45,000 points morphs between shapes as you scroll, with curl turbulence,
+   grain, a cursor swirl and travelling glow.
+   ============================================================================ */
+const N = 45000;
+const FILAMENTS = 3600;
+const STMT = 0;                     // the particle that is Exhibit A in the galaxy
+const SCENES = ["THE UNIVERSE", "THE STATEMENT", "SENTENCE → FACT", "THE MACHINE", "TRUTH ENGINE",
+                "THE JUDGE", "THE VERDICT", "CLAIM FORGE"];
+// colour classes: 0 bone · 1 truth/lime · 2 lie/red · 3 machine/blue · 4 dim · 5 amber
+const HI = { BONE: 0, LIME: 1, RED: 2, BLUE: 3, DIM: 4, AMBER: 5 };
+const FONT = "Figtree, Arial, sans-serif";
 
-/* ---------- architecture diagram ---------- */
-function drawDiagram() {
-  const W = 1180, H = 150, n = STAGES.length, bw = 160, gap = (W - 40 - n * bw) / (n - 1);
-  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Pipeline">`;
-  s += `<text x="20" y="18" fill="#7c8596" font-size="11">universe.csv · ~20,000 rows</text>`;
-  s += `<text x="${W - 20}" y="18" fill="#7c8596" font-size="11" text-anchor="end">output.csv · labels + 1,000 claims</text>`;
-  STAGES.forEach((st, i) => {
-    const x = 20 + i * (bw + gap), y = 34;
-    if (i) s += `<path class="edge" id="e-${st.id}" d="M${x - gap + 2} ${y + 46} L${x - 4} ${y + 46}"/>`;
-    s += `<g class="node" id="n-${st.id}"><rect x="${x}" y="${y}" width="${bw}" height="92"/>
-      <text class="t" x="${x + 12}" y="${y + 24}">${i + 1}. ${st.name}</text>
-      <text class="s" x="${x + 12}" y="${y + 44}">${st.sub}</text>
-      <text class="m" x="${x + 12}" y="${y + 74}" id="m-${st.id}">·</text></g>`;
-  });
-  $("#svgwrap").innerHTML = s + "</svg>";
-}
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-async function animate(stages) {
-  const by = Object.fromEntries((stages || []).map((s) => [s.name, s]));
-  for (const st of STAGES) {
-    document.querySelectorAll(".node").forEach((n) => n.classList.remove("lit"));
-    $(`#n-${st.id}`).classList.add("lit");
-    const e = $(`#e-${st.id}`); if (e) e.classList.add("lit");
-    const m = by[st.id];
-    $(`#m-${st.id}`).textContent = m ? `${m.count.toLocaleString()} · ${m.ms < 1000 ? Math.round(m.ms) + " ms" : (m.ms / 1000).toFixed(1) + " s"}` : "—";
-    await sleep(260);
-    $(`#n-${st.id}`).classList.add("done");
-  }
-  document.querySelectorAll(".node").forEach((n) => n.classList.remove("lit"));
-  document.querySelectorAll(".edge").forEach((e) => e.classList.remove("lit"));
-}
-function pulseWaiting(on) {
-  if (!on) return;
-  let i = 0;
-  const t = setInterval(() => {
-    if (!pulseWaiting.busy) { clearInterval(t); return; }
-    document.querySelectorAll(".node").forEach((n) => n.classList.remove("lit"));
-    $(`#n-${STAGES[i % STAGES.length].id}`).classList.add("lit"); i++;
-  }, 300);
-}
+const rand = (() => { let s = 7; return () => (s = (s * 16807) % 2147483647) / 2147483647; })();
+const gauss = () => { let u = 0, v = 0; while (!u) u = rand(); while (!v) v = rand(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
+const lerp = (a, b, t) => a + (b - a) * t;
 
-/* ---------- values ---------- */
-function fmt(v) {
-  if (!v) return "";
-  const n = (x) => typeof x === "number" ? x.toLocaleString("en-US", { maximumFractionDigits: 3 }) : x;
-  const cur = { EUR: "€", USD: "$", GBP: "£" };
-  switch (v.kind) {
-    case "money": return `${cur[v.currency] || v.currency + " "}${n(v.value)}${v.per ? " / " + v.per : ""}`;
-    case "quantity": return `${n(v.value)} ${v.unit}${v.value === 1 || /^[A-Z]/.test(v.unit) || ["m","g","kg","km","cm","mm","in","mAh"].includes(v.unit) ? "" : "s"}`;
-    case "duration": return `${n(v.value)} ${v.unit}`;
-    case "percent": return `${n(v.value)}%`;
-    case "version": return `v${v.value}`;
-    case "boolean": return v.value ? "yes" : "no";
-    default: return String(v.value);
+function newStage() { return { pos: new Float32Array(N * 3), role: new Float32Array(N), hi: new Float32Array(N), n: 0 }; }
+function put(S, x, y, z, role = 0.4, hi = 0) {
+  if (S.n >= N) return;
+  const i = S.n++;
+  S.pos[i * 3] = x; S.pos[i * 3 + 1] = y; S.pos[i * 3 + 2] = z; S.role[i] = role; S.hi[i] = hi;
+}
+// background dust on a far shell, so every shape sits in the same universe
+function fillDust(S, rMin = 520, rMax = 900) {
+  while (S.n < N) {
+    const u = rand() * 2 - 1, th = rand() * Math.PI * 2, r = lerp(rMin, rMax, rand());
+    const s = Math.sqrt(1 - u * u);
+    put(S, Math.cos(th) * s * r, u * r * 0.6, Math.sin(th) * s * r - 250, 0.12 + rand() * 0.2, HI.DIM);
   }
 }
-const STATUS_WORDS = { agrees: "holds on this date", stale: "was true earlier — stale", premature: "only true later — premature",
-  invented: "never true in the timeline", unknown: "no other evidence" };
+function rotY(x, z, a) { const c = Math.cos(a), s = Math.sin(a); return [x * c - z * s, x * s + z * c]; }
 
-/* ---------- run ---------- */
-let LAST = null;
-function parseInput() {
-  return $("#input").value.split("\n").map((l) => l.trim()).filter(Boolean).map((l, i) => {
-    const m = l.match(/^(\d{4}-\d{2}-\d{2})\s*[|,;\t]\s*(.+)$/);
-    return m ? { id: `r-${i + 1}`, date: m[1], text: m[2] } : { id: `r-${i + 1}`, date: "2026-10-28", text: l };
-  });
-}
-async function run() {
-  const rows = parseInput();
-  if (!rows.length) return;
-  $("#runBtn").disabled = true;
-  $("#rows").innerHTML = rows.map((r) => rowHtml({ ...r, verdict: "wait" })).join("");
-  $("#evBody").className = "empty"; $("#evBody").textContent = "Judging…";
-  pulseWaiting.busy = true; pulseWaiting(true);
-  try {
-    const res = await fetch(API + "/api/run", { method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ rows }) });
-    if (!res.ok) throw new Error(await res.text());
-    LAST = await res.json();
-  } catch (e) {
-    pulseWaiting.busy = false; $("#runBtn").disabled = false;
-    $("#rows").innerHTML = `<div class="empty">Run failed: ${esc(e.message).slice(0, 300)}</div>`; return;
+/* ---- text → points (the sentence, the fact parts, the stamp) --------------------------- */
+function textPoints(lines, count, worldWidth, cx = 0, cy = 0, cz = 0, depth = 3) {
+  const W = 2600, H = lines.reduce((h, l) => Math.max(h, l.y + l.size), 0) + 60;
+  const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+  const g = cv.getContext("2d");
+  g.textBaseline = "middle";
+  for (const line of lines) {
+    g.font = `${line.weight || 800} ${line.size}px ${FONT}`;
+    const full = line.segs.map(s => s[0]).join("");
+    let x = (W - g.measureText(full).width) / 2;
+    for (const [t, hi] of line.segs) {           // the red channel carries the colour class
+      g.fillStyle = `rgb(${hi * 40 + 10},255,255)`;
+      g.fillText(t, x, line.y);
+      x += g.measureText(t).width;
+    }
   }
-  pulseWaiting.busy = false;
-  await animate(LAST.stages);
-  $("#runBtn").disabled = false;
-  const c = { true: 0, false: 0, unsure: 0 };
-  LAST.rows.forEach((r) => c[r.verdict] = (c[r.verdict] || 0) + 1);
-  $("#summary").innerHTML = `<span><b style="color:var(--true)">${c.true}</b>true</span><span><b style="color:var(--false)">${c.false}</b>false</span><span><b style="color:var(--unsure)">${c.unsure}</b>unsure</span>`;
-  $("#rows").innerHTML = "";
-  for (const r of LAST.rows) { $("#rows").insertAdjacentHTML("beforeend", rowHtml(r)); await sleep(70); }
-  document.querySelectorAll(".row").forEach((el) => el.onclick = () => select(el.dataset.id));
-  const firstFalse = LAST.rows.find((r) => r.verdict === "false") || LAST.rows[0];
-  if (firstFalse) select(firstFalse.id);
-}
-function rowHtml(r) {
-  const col = { true: "var(--true)", false: "var(--false)", unsure: "var(--unsure)" }[r.verdict] || "var(--line)";
-  const conf = r.confidence == null ? null : Math.round(r.confidence * 100);
-  const chips = (r.facts || []).map((f) => `<span class="chip ${f.status}">${esc(f.subject)} · ${esc(f.attribute.replace(/_/g, " "))} = ${esc(fmt(f.value))}</span>`).join("");
-  return `<div class="row" data-id="${esc(r.id)}">
-    <div class="stamp ${r.verdict}">${r.verdict === "wait" ? "· · ·" : r.verdict.toUpperCase()}</div>
-    <div><div class="txt"><span class="d">${esc(r.date)}</span>${esc(r.text)}</div>
-      ${r.why ? `<div class="why">→ ${esc(r.why)}</div>` : ""}<div class="chips">${chips}</div></div>
-    <div class="conf">${conf == null ? (r.verdict === "unsure" ? "no confidence" : "") : `<b>${conf}%</b> sure`}
-      <div class="gauge"><i style="width:${conf ?? 0}%;background:${col}"></i></div></div></div>`;
-}
-
-/* ---------- evidence ---------- */
-function select(id) {
-  document.querySelectorAll(".row").forEach((el) => el.classList.toggle("sel", el.dataset.id === id));
-  const r = LAST.rows.find((x) => x.id === id); if (!r) return;
-  const ev = $("#evBody"); ev.className = "";
-  if (!r.facts || !r.facts.length) {
-    ev.innerHTML = `<p class="why">No fact was extracted from this sentence, so it was judged on its page and its wording. ${esc(r.why)}</p>`; return;
+  const data = g.getImageData(0, 0, W, H).data, cand = [];
+  let minX = W, maxX = 0, minY = H, maxY = 0;
+  for (let y = 0; y < H; y += 2) for (let x = 0; x < W; x += 2) {
+    const k = (y * W + x) * 4;
+    if (data[k + 3] > 150) {
+      cand.push([x, y, Math.max(0, Math.round((data[k] - 10) / 40))]);
+      minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+    }
   }
-  ev.innerHTML = r.facts.map((f, i) => {
-    const tl = LAST.timelines[`${f.subject}|${f.attribute}`];
-    return `<div class="fact"><h3>${esc(f.subject)} · ${esc(f.attribute.replace(/_/g, " "))}: <span style="color:${f.status === "agrees" ? "var(--true)" : ["stale","premature","invented"].includes(f.status) ? "var(--false)" : "var(--dim)"}">${esc(fmt(f.value))}</span></h3>
-      <p>This row says ${esc(fmt(f.value))} on ${esc(r.date)}: ${STATUS_WORDS[f.status] || f.status}.</p>
-      <div class="tl">${tl ? timeline(tl, f, r.date) : '<div class="empty">no timeline</div>'}</div></div>`;
-  }).join("") + `<div class="legend"><span class="lt">labelled true</span><span class="lf">labelled false</span><span class="lu">unlabelled row</span><span class="lr">this row</span></div>`;
-}
-function timeline(tl, f, day) {
-  const W = 900, H = 170, L = 60, R = 20, T = 18, B = 34;
-  const t0 = Date.parse("2025-10-01"), t1 = Date.parse("2026-11-01");
-  const X = (d) => L + (W - L - R) * (Date.parse(d) - t0) / (t1 - t0);
-  const vals = []; const key = (v) => JSON.stringify(v);
-  [...tl.steps.map((s) => s.value), ...tl.mentions.map((m) => m.value), f.value].forEach((v) => { if (!vals.some((x) => key(x) === key(v))) vals.push(v); });
-  const Y = (v) => T + (H - T - B) * (vals.length === 1 ? .5 : vals.findIndex((x) => key(x) === key(v)) / (vals.length - 1));
-  let s = `<svg viewBox="0 0 ${W} ${H}">`;
-  for (let m = 0; m <= 13; m += 2) { const d = new Date(2025, 9 + m, 1); const x = X(d.toISOString().slice(0, 10));
-    s += `<line x1="${x}" y1="${T - 6}" x2="${x}" y2="${H - B + 4}" stroke="#1a1e26"/><text x="${x}" y="${H - 12}" fill="#5d6577" font-size="10" text-anchor="middle">${d.toLocaleString("en", { month: "short" })} ${String(d.getFullYear()).slice(2)}</text>`; }
-  vals.forEach((v) => s += `<text x="${L - 8}" y="${Y(v) + 4}" fill="#7c8596" font-size="10.5" text-anchor="end">${esc(fmt(v)).slice(0, 12)}</text>`);
-  tl.steps.forEach((st, i) => { const x0 = X(st.from), x1 = st.to ? X(st.to) : X("2026-10-29"), y = Y(st.value);
-    s += `<line x1="${x0}" y1="${y}" x2="${x1}" y2="${y}" stroke="#39ff88" stroke-width="3" opacity=".75"/>`;
-    const nx = tl.steps[i + 1]; if (nx) s += `<line x1="${x1}" y1="${y}" x2="${x1}" y2="${Y(nx.value)}" stroke="#39ff88" stroke-width="1.5" stroke-dasharray="3 3" opacity=".6"/>`; });
-  tl.mentions.forEach((m) => { const c = m.verdict === "true" ? "#39ff88" : m.verdict === "false" ? "#ff3b5c" : "#8a93a6";
-    s += `<circle cx="${X(m.date)}" cy="${Y(m.value)}" r="4.5" fill="${c}" fill-opacity=".85"/>`; });
-  s += `<circle cx="${X(day)}" cy="${Y(f.value)}" r="9" fill="none" stroke="#59c3ff" stroke-width="2.5"/><line x1="${X(day)}" y1="${T - 6}" x2="${X(day)}" y2="${H - B + 4}" stroke="#59c3ff" stroke-dasharray="2 4"/>`;
-  return s + "</svg>";
+  const s = worldWidth / Math.max(1, maxX - minX), mx = (minX + maxX) / 2, my = (minY + maxY) / 2;
+  const out = [];
+  for (let i = 0; i < count; i++) {
+    const c = cand[(rand() * cand.length) | 0];
+    out.push([cx + (c[0] - mx + rand() * 2) * s, cy - (c[1] - my + rand() * 2) * s, cz + (rand() - 0.5) * depth, c[2]]);
+  }
+  out.sort((a, b) => a[0] - b[0]);               // neighbours in index stay neighbours in space
+  return out;
 }
 
-/* ---------- claims ---------- */
-let CLAIMS = [], FILTER = "all";
-async function loadClaims() {
-  if (CLAIMS.length) return;
-  try { CLAIMS = (await (await fetch(API + "/api/claims")).json()).claims; } catch (e) { $("#claims").textContent = "Could not load claims."; return; }
-  const types = ["all", "fact", "compare", "change", "at_event", "relation"];
-  $("#filters").innerHTML = types.map((t) => `<button class="btn ${t === FILTER ? "on" : ""}" data-t="${t}">${t} · ${t === "all" ? CLAIMS.length : CLAIMS.filter((c) => c.type === t).length}</button>`).join("");
-  document.querySelectorAll("#filters button").forEach((b) => b.onclick = () => { FILTER = b.dataset.t; document.querySelectorAll("#filters button").forEach((x) => x.classList.toggle("on", x === b)); showClaims(); });
-  showClaims();
-}
-function showClaims() {
-  const list = CLAIMS.filter((c) => FILTER === "all" || c.type === FILTER).slice(0, 400);
-  $("#claims").className = "";
-  $("#claims").innerHTML = list.map((c) => `<div class="claim"><div class="ty">${c.type.replace("_", " ")}</div>
-    <div>${esc(c.text)}<div class="src">connects: ${c.sources.map((s) => esc(s.subject) + " · " + esc(s.attribute.replace(/_/g, " "))).join("  ⟷  ")}</div></div>
-    <div class="c">${Math.round(c.confidence * 100)}%</div></div>`).join("");
+/* ---- the eight shapes ------------------------------------------------------------------- */
+function stageGalaxy() {
+  const S = newStage();
+  put(S, 150 * Math.cos(1.0), 0, 150 * Math.sin(1.0), 3.0, HI.LIME);  // Exhibit A, on an arm
+  const arms = 3;
+  for (let i = 1; i < N * 0.78; i++) {
+    const u = Math.pow(rand(), 0.75), arm = i % arms, r = 14 + u * 270;
+    const th = arm * (2 * Math.PI / arms) + r * 0.021 + gauss() * (0.28 - u * 0.12);
+    const spread = gauss() * (4 + 10 * (1 - u));
+    const lie = rand() < 0.035;
+    put(S, Math.cos(th) * r + spread, gauss() * (6 + 10 * (1 - u)) * 0.6, Math.sin(th) * r + spread,
+        lie ? 0.8 : (rand() < 0.08 ? 0.85 : 0.3 + (1 - u) * 0.35), lie ? HI.RED : HI.BONE);
+  }
+  while (S.n < N * 0.88) {                          // the bulge
+    const r = Math.abs(gauss()) * 26;
+    const a = rand() * Math.PI * 2, b = Math.acos(rand() * 2 - 1);
+    put(S, Math.sin(b) * Math.cos(a) * r, Math.cos(b) * r * 0.55, Math.sin(b) * Math.sin(a) * r, 0.9, HI.BONE);
+  }
+  fillDust(S, 360, 820);
+  return S;
 }
 
-/* ---------- how it works ---------- */
-const PRINCIPLES = [
-  ["Every sentence is a set of facts", "“Hooly Jules works in 8 languages” is the fact (Hooly Jules, programming languages, 8). Our reader parses values exactly as the referee's published rules do; a model trained on the practice rows decides which fact each value is about."],
-  ["Every fact is a staircase in time", "Prices change, teams grow. For each fact we fit its timeline over a year of pages with dynamic programming: a lone lie is outvoted, a real change repeated by later pages becomes a new step."],
-  ["Lies have three shapes", "Invented (never true), stale (true before), premature (true only later). The evidence board shows which, on the fact's own timeline."],
-  ["Sources earn trust", "Some pages are rumour mills. Each page's trust is learned from how well it agrees with the timelines, and feeds back into them — truth discovery, EM-style."],
-  ["Labels are anchors, not answers", "The 1,900 labelled rows pin the timelines and train the judge. Every training feature is computed out of fold, so the model learns on exactly what it sees for a new row."],
-  ["No LLM at run time", "Rules, dynamic programming and two small gradient-boosted models: explainable, offline, 20,000 rows in about two minutes on 2 CPUs."],
-  ["Claims are proven before they ship", "1,000 claims are built from confirmed timeline steps, then read back by our clone of the referee. 985 of 1,000 check out as true on held-out data, 0 rejected."],
-];
-$("#principles").innerHTML = PRINCIPLES.map(([h, p]) => `<div class="card"><h3>${h}</h3><p>${p}</p></div>`).join("");
+function stageStatement() {
+  const S = newStage();
+  const pts = textPoints([
+    { y: 110, size: 170, segs: [["Hooly Jules", HI.BLUE], [" works in ", HI.BONE], ["8 languages", HI.LIME], [".", HI.BONE]] },
+    { y: 300, size: 70, weight: 500, segs: [["page dated 8 September 2026", HI.DIM]] },
+  ], Math.floor(N * 0.68), 440, 0, 40, 0, 8);
+  for (const p of pts) put(S, p[0], p[1], p[2], p[3] === HI.DIM ? 0.35 : 0.75, p[3]);
+  fillDust(S);
+  return S;
+}
 
-/* ---------- wiring ---------- */
-document.querySelectorAll("nav button").forEach((b) => b.onclick = () => {
-  document.querySelectorAll("nav button").forEach((x) => x.classList.toggle("on", x === b));
-  document.querySelectorAll("section").forEach((s) => s.classList.toggle("on", s.id === "tab-" + b.dataset.tab));
-  if (b.dataset.tab === "claims") loadClaims();
+function stageFact() {
+  const S = newStage();
+  const parts = [
+    ["Hooly Jules", HI.BLUE, -160, 108, -40], ["programming languages", HI.BONE, 140, 122, 25],
+    ["8 languages", HI.LIME, -150, -48, 35], ["8 Sep 2026", HI.AMBER, 160, -42, -25],
+  ];
+  const per = Math.floor(N * 0.13);
+  for (const [t, hi, x, y, z] of parts) {
+    const w = Math.min(185, 17 * t.length);
+    for (const p of textPoints([{ y: 90, size: 150, segs: [[t, hi]] }], per, w, x, y, z, 6)) put(S, p[0], p[1], p[2], 0.8, hi);
+  }
+  // the fact's core, and threads from it to each part
+  for (let i = 0; i < N * 0.05; i++) {
+    const r = Math.abs(gauss()) * 9, a = rand() * Math.PI * 2, b = Math.acos(rand() * 2 - 1);
+    put(S, Math.sin(b) * Math.cos(a) * r, Math.cos(b) * r, Math.sin(b) * Math.sin(a) * r, 1.0, HI.LIME);
+  }
+  for (let i = 0; i < N * 0.16; i++) {
+    const [, hi, x, y, z] = parts[i % 4], t = (i / 4 % 1000) / 1000;
+    const bend = Math.sin(t * Math.PI) * 18;
+    put(S, x * t * 0.82 + gauss() * 0.8, y * t * 0.82 + bend + gauss() * 0.8, z * t * 0.82, 0.55, hi === HI.BONE ? HI.DIM : hi);
+  }
+  fillDust(S);
+  return S;
+}
+
+function stageMachine() {
+  const S = newStage();
+  const gates = 7, x0 = -300, step = 100, size = 120;
+  const tilt = (x, y, z) => {                       // turn the tunnel so the gates face us at an angle
+    const [rx, rz] = rotY(x, z, -0.62);
+    const a = 0.16, c = Math.cos(a), s = Math.sin(a);
+    return [rx, y * c - rz * s, y * s + rz * c];
+  };
+  // gate frames and their inner lattice ("logic gates")
+  for (let i = 0; i < N * 0.42; i++) {
+    const g = i % gates, gx = x0 + g * step, k = rand();
+    let y, z;
+    if (k < 0.55) {                                 // frame
+      const e = rand() * 4, t = rand() - 0.5;
+      [y, z] = e < 1 ? [t * size, -size / 2] : e < 2 ? [t * size, size / 2] : e < 3 ? [-size / 2, t * size] : [size / 2, t * size];
+    } else {                                        // lattice
+      const cells = 6, along = rand() < 0.5;
+      const line = (((rand() * cells) | 0) + 0.5) / cells - 0.5;
+      [y, z] = along ? [line * size, (rand() - 0.5) * size] : [(rand() - 0.5) * size, line * size];
+    }
+    const [px, py, pz] = tilt(gx + gauss() * 0.7, y, z);
+    put(S, px, py, pz, k < 0.55 ? 0.8 : 0.4, HI.BLUE);
+  }
+  // the thread: a double helix running through every gate
+  for (let i = 0; i < N * 0.3; i++) {
+    const t = i / (N * 0.3), x = -390 + t * 780, strand = i % 2;
+    const a = t * Math.PI * 26 + strand * Math.PI, r = 16;
+    const [px, py, pz] = tilt(x, Math.cos(a) * r + gauss() * 1.1, Math.sin(a) * r + gauss() * 1.1);
+    put(S, px, py, pz, 0.95, HI.LIME);
+  }
+  fillDust(S);
+  return S;
+}
+
+// Hooly Jules's programming languages in the practice data (date, level, kind)
+const JULES = [["2026-04-15", 3, "lie"], ["2026-04-17", 1, "ok"], ["2026-04-20", 1, "ok"], ["2026-05-12", 1, "ok"],
+  ["2026-06-02", 1, "ok"], ["2026-06-03", 1, "ok"], ["2026-08-18", 2, "ok"], ["2026-08-19", 2, "ok"],
+  ["2026-08-21", 2, "ok"], ["2026-09-08", 1, "exhibit"], ["2026-09-20", 2, "ok"], ["2026-10-26", 1, "lie"]];
+function monthX(d) { const [y, m, dd] = d.split("-").map(Number); return ((y - 2025) * 12 + (m - 10) + (dd - 1) / 30) / 13 * 560 - 280; }
+const LEVEL_Y = { 1: -70, 2: 20, 3: 120 };
+
+function stageTimeline() {
+  const S = newStage();
+  const tilt = (x, y, z) => {                       // seen from a little above, so the floor reads
+    const [rx, rz] = rotY(x, z, -0.3);
+    const a = 0.34, c = Math.cos(a), s = Math.sin(a);
+    return [rx - 45, (y + 10) * c - rz * s + 15, (y + 10) * s + rz * c];
+  };
+  // floor grid and axis
+  for (let i = 0; i < N * 0.16; i++) {
+    const along = rand() < 0.5, line = (((rand() * 14) | 0) / 13) - 0.5;
+    const x = along ? (rand() - 0.5) * 600 : line * 600, z = along ? line * 220 : (rand() - 0.5) * 220;
+    const [px, py, pz] = tilt(x, -140, z);
+    put(S, px, py, pz, 0.25, HI.DIM);
+  }
+  for (const lvl of [1, 2, 3]) for (let i = 0; i < N * 0.02; i++) {   // faint level guides
+    const [px, py, pz] = tilt((rand() - 0.5) * 580, LEVEL_Y[lvl], -60);
+    put(S, px, py, pz, 0.2, HI.DIM);
+  }
+  // the staircase: 8 languages from April, 14 from mid-August
+  const a = monthX("2026-04-17"), b = monthX("2026-08-15"), e = 290;
+  const path = [[a, LEVEL_Y[1]], [b, LEVEL_Y[1]], [b, LEVEL_Y[2]], [e, LEVEL_Y[2]]];
+  const lens = [b - a, LEVEL_Y[2] - LEVEL_Y[1], e - b], total = lens.reduce((x, y) => x + y);
+  for (let i = 0; i < N * 0.3; i++) {
+    let d = rand() * total, seg = 0;
+    while (seg < 2 && d > lens[seg]) d -= lens[seg++];
+    const [x1, y1] = path[seg], [x2, y2] = path[seg + 1], t = d / lens[seg];
+    const [px, py, pz] = tilt(lerp(x1, x2, t) + gauss() * 1.2, lerp(y1, y2, t) + gauss() * 1.2, (rand() - 0.5) * 34);
+    put(S, px, py, pz, 0.85, HI.LIME);
+  }
+  // the mentions: white = true, red = lies, blue = Exhibit A
+  for (let i = 0; i < N * 0.12; i++) {
+    const [d, lvl, kind] = JULES[i % JULES.length];
+    const r = kind === "exhibit" ? 12 : 6.5, u = rand() * 2 - 1, th = rand() * Math.PI * 2, rr = Math.cbrt(rand()) * r;
+    const [px, py, pz] = tilt(monthX(d) + Math.sqrt(1 - u * u) * Math.cos(th) * rr, LEVEL_Y[lvl] + u * rr, 45 + Math.sqrt(1 - u * u) * Math.sin(th) * rr);
+    put(S, px, py, pz, 1.0, kind === "lie" ? HI.RED : kind === "exhibit" ? HI.BLUE : HI.BONE);
+  }
+  fillDust(S);
+  return S;
+}
+
+function stageForest() {
+  const S = newStage();
+  const trees = 7, branchPts = [];
+  for (let t = 0; t < trees; t++) {
+    const ang = (t - (trees - 1) / 2) * 0.4, R = 200;
+    const bx = Math.sin(ang) * R, bz = -Math.cos(ang) * R + 150, h = 44 + (t % 3) * 8;
+    const grow = (x, y, z, dx, dy, dz, len, depth) => {
+      const ex = x + dx * len, ey = y + dy * len, ez = z + dz * len;
+      branchPts.push([x, y, z, ex, ey, ez, depth]);
+      if (depth >= 5) return;
+      for (const sgn of [-1, 1]) {
+        const sp = 0.55 + rand() * 0.25, yaw = rand() * Math.PI;
+        const ndx = dx * Math.cos(sp) + sgn * Math.sin(sp) * Math.cos(yaw), ndz = dz * Math.cos(sp) + sgn * Math.sin(sp) * Math.sin(yaw);
+        const ndy = dy * Math.cos(sp) + 0.25, n = Math.hypot(ndx, ndy, ndz);
+        grow(ex, ey, ez, ndx / n, ndy / n, ndz / n, len * 0.72, depth + 1);
+      }
+    };
+    grow(bx, -135, bz, 0, 1, 0, h, 0);
+  }
+  for (let i = 0; i < N * 0.62; i++) {
+    const [x1, y1, z1, x2, y2, z2, d] = branchPts[i % branchPts.length], t = rand();
+    put(S, lerp(x1, x2, t) + gauss() * (2.2 - d * 0.3), lerp(y1, y2, t) + gauss() * 0.8, lerp(z1, z2, t) + gauss() * (2.2 - d * 0.3), 0.55, HI.BLUE);
+  }
+  const leaves = branchPts.filter(b => b[6] === 5);
+  for (let i = 0; i < N * 0.12; i++) {              // lit leaves: most vote "false" for Exhibit A
+    const [, , , x, y, z] = leaves[i % leaves.length], r = 3;
+    put(S, x + gauss() * r, y + gauss() * r, z + gauss() * r, 1.0, (i % leaves.length) % 9 === 0 ? HI.LIME : HI.RED);
+  }
+  for (let i = 0; i < N * 0.08; i++) {              // the ground they stand on
+    const r = Math.sqrt(rand()) * 330, a = rand() * Math.PI * 2;
+    put(S, Math.cos(a) * r, -135 + gauss() * 1.2, Math.sin(a) * r * 0.5 + 60, 0.2, HI.DIM);
+  }
+  fillDust(S);
+  return S;
+}
+
+function stageVerdict() {
+  const S = newStage();
+  const tilt = -0.1, c = Math.cos(tilt), s = Math.sin(tilt);
+  const pts = textPoints([{ y: 120, size: 230, segs: [["FALSE", HI.RED]] }], Math.floor(N * 0.42), 330, 0, 48, 0, 14);
+  for (const p of pts) put(S, p[0] * c - p[1] * s, p[0] * s + p[1] * c, p[2], 0.9, HI.RED);
+  for (let i = 0; i < N * 0.14; i++) {              // the stamp's border
+    const w = 420, h = 165, e = rand() * 4, t = rand() - 0.5, th = gauss() * 2.2;
+    let [x, y] = e < 1 ? [t * w, h / 2 + th] : e < 2 ? [t * w, -h / 2 + th] : e < 3 ? [w / 2 + th, t * h] : [-w / 2 + th, t * h];
+    y += 48;
+    put(S, x * c - y * s, x * s + y * c, gauss() * 3, 0.9, HI.RED);
+  }
+  const sub = textPoints([{ y: 60, size: 90, weight: 500, segs: [["stale · 97% sure", HI.AMBER]] }], Math.floor(N * 0.08), 220, 0, -72, 0, 4);
+  for (const p of sub) put(S, p[0], p[1], p[2], 0.6, HI.AMBER);
+  fillDust(S);
+  return S;
+}
+
+function stageClaims() {
+  const S = newStage();
+  for (let c = 0; c < 1000; c++) {                  // 1,000 claims: tight bright clusters
+    const r = 80 + Math.pow(rand(), 0.6) * 230, a = rand() * Math.PI * 2, u = gauss() * 0.22;
+    const cx = Math.cos(a) * r, cy = u * r * 0.6, cz = Math.sin(a) * r;
+    for (let k = 0; k < 12; k++) put(S, cx + gauss() * 1.6, cy + gauss() * 1.6, cz + gauss() * 1.6, 1.0, HI.LIME);
+  }
+  for (let i = 0; i < N * 0.25; i++) {              // orbit rings
+    const ring = i % 3, a = rand() * Math.PI * 2, r = 150 + ring * 70 + gauss() * 2;
+    const tl = [0.35, -0.5, 1.1][ring], x = Math.cos(a) * r, y0 = 0, z = Math.sin(a) * r;
+    put(S, x, y0 * Math.cos(tl) - z * Math.sin(tl), y0 * Math.sin(tl) + z * Math.cos(tl), 0.45, HI.BONE);
+  }
+  fillDust(S, 380, 820);
+  return S;
+}
+
+/* ---- shaders (the skeleton's morph + curl + grain + swirl, generalised to any stage pair) */
+const vertexShader = `
+  uniform float uTime, uMix, uVelocity, uPointSize, uGrain, uCurl, uDensity, uGlow, uFrom, uTo, uZoom;
+  uniform vec3 uMouse;
+  attribute vec3 aTo; attribute float aSeed, aRoleF, aRoleT, aHiF, aHiT;
+  varying float vAlpha, vPulse, vT; varying vec3 vColF, vColT;
+
+  vec3 curl(vec3 p, float t) {
+    vec3 q = p * 0.016 + vec3(t * 0.45, -t * 0.35, t * 0.25);
+    return vec3(sin(q.y * 2.1 + cos(q.z * 1.9 + t)) * cos(q.x * 1.7),
+                sin(q.z * 2.3 + cos(q.x * 2.1 - t)) * cos(q.y * 1.5),
+                sin(q.x * 1.9 + cos(q.y * 2.5 + t)) * cos(q.z * 1.8));
+  }
+  vec3 ry(vec3 p, float a) { float c = cos(a), s = sin(a); return vec3(p.x * c - p.z * s, p.y, p.x * s + p.z * c); }
+  vec3 rx(vec3 p, float a) { float c = cos(a), s = sin(a); return vec3(p.x, p.y * c - p.z * s, p.y * s + p.z * c); }
+  // each shape's own slow life
+  vec3 idle(vec3 p, float st) {
+    if (st < 0.5) return rx(ry(p, uTime * 0.05), -1.08);                 // galaxy: turn, tilted towards us
+    if (st < 2.5) return p + vec3(0.0, sin(uTime * 0.7 + p.x * 0.012) * 2.5, 0.0); // words float
+    if (st < 3.5) return ry(p, sin(uTime * 0.18) * 0.12);                 // the machine sways
+    if (st < 4.5) return ry(p, sin(uTime * 0.14) * 0.16);
+    if (st < 5.5) return ry(p, uTime * 0.06);                             // the forest turns
+    if (st < 6.5) return p * (1.0 + sin(uTime * 2.4) * 0.008);            // the stamp breathes
+    return ry(p, uTime * 0.04);                                           // the new universe turns
+  }
+  vec3 colour(float hi, float role) {
+    if (hi < 0.5) return mix(vec3(0.62, 0.66, 0.72), vec3(0.99, 0.99, 0.97), clamp(role, 0.0, 1.0));
+    if (hi < 1.5) return vec3(0.843, 0.945, 0.231);
+    if (hi < 2.5) return vec3(1.0, 0.302, 0.369);
+    if (hi < 3.5) return vec3(0.31, 0.525, 0.969);
+    if (hi < 4.5) return vec3(0.42, 0.45, 0.52);
+    return vec3(1.0, 0.69, 0.125);
+  }
+  float smooth3(float x) { return x * x * (3.0 - 2.0 * x); }
+  void main() {
+    if (aSeed > uDensity) { gl_Position = vec4(2.0, 2.0, 2.0, 0.0); gl_PointSize = 0.0; return; }
+    float t = smooth3(clamp(uMix, 0.0, 1.0));
+    vT = t;
+    vec3 p = mix(idle(position, uFrom), idle(aTo, uTo), t);
+    float env = sin(t * 3.14159265);
+    p += curl(p + aSeed * 18.0, uTime * 1.4) * (env * 38.0 + clamp(uVelocity * 55.0, 0.0, 48.0)) * uCurl;
+    p += vec3(sin(uTime * 28.0 + aSeed * 628.0), cos(uTime * 24.0 + aSeed * 412.0), sin(uTime * 31.0 + aSeed * 819.0)) * uGrain * 1.2;
+    vec3 tm = p - uMouse; float dm = length(tm);
+    if (dm < 85.0 && dm > 0.001) {
+      float f = pow(1.0 - dm / 85.0, 2.0);
+      p += (normalize(tm) * 28.0 + normalize(cross(tm, vec3(0.0, 1.0, 0.0))) * 18.0) * f;
+    }
+    float wave = (p.x + p.y * 0.5 + p.z * 0.5) * 0.018 - uTime * 2.2;
+    float fire = pow(max(0.0, sin(wave + aSeed * 2.5)), 8.0) * uGlow;
+    vPulse = fire;
+    float role = mix(aRoleF, aRoleT, t);
+    vColF = colour(aHiF, aRoleF); vColT = colour(aHiT, aRoleT);
+    vec4 mv = modelViewMatrix * vec4(p, 1.0);
+    gl_Position = projectionMatrix * mv;
+    float depth = 360.0 * uZoom / max(80.0, -mv.z);              // uZoom: the camera steps back on narrow screens
+    float big = role > 2.0 ? 4.0 : 1.0;                                     // Exhibit A in the galaxy
+    gl_PointSize = clamp(uPointSize * depth * mix(0.85, 1.75, min(role, 1.0)) * big + fire * 1.4, 0.8, 22.0);
+    float fade = smoothstep(980.0 * uZoom, 180.0 * uZoom, -mv.z);
+    float flick = 1.0 - uGrain * 0.35 * fract(sin(dot(p.xy, vec2(12.9898, 78.233)) + uTime * 6.0) * 43758.5453);
+    vAlpha = clamp(fade * flick * (0.4 + min(role, 1.0) * 0.5 + fire * 0.4), 0.04, 1.0);
+  }`;
+const fragmentShader = `
+  varying float vAlpha, vPulse, vT; varying vec3 vColF, vColT;
+  void main() {
+    vec2 uv = gl_PointCoord - 0.5; float d = dot(uv, uv);
+    if (d > 0.25) discard;
+    vec3 c = mix(vColF, vColT, vT);
+    c = mix(c, vec3(0.843, 0.945, 0.231), vPulse * 0.35);
+    gl_FragColor = vec4(c, vAlpha * smoothstep(0.25, 0.04, d));
+  }`;
+const lineFragment = `
+  varying float vAlpha, vPulse, vT; varying vec3 vColF, vColT;
+  uniform float uGlow;
+  void main() { gl_FragColor = vec4(mix(vColF, vColT, vT), vAlpha * 0.13 * uGlow); }`;
+
+/* ---- scene ------------------------------------------------------------------------------- */
+let renderer, scene, camera, points, lines, uniforms, stages = [], filStages = [], seg = -1;
+const mouse = { x: 0, y: 0, sx: 0, sy: 0 };
+let targetMorph = 0, morph = 0, prevMorph = 0, velocity = 0;
+
+function buildFilaments() {
+  // short threads between index neighbours, collapsed wherever a shape pulls them far apart
+  for (const S of stages) {
+    const pos = new Float32Array(FILAMENTS * 6), hi = new Float32Array(FILAMENTS * 2), role = new Float32Array(FILAMENTS * 2);
+    for (let f = 0; f < FILAMENTS; f++) {
+      const a = (f * 12) % (N - 1), b = a + 1;
+      const dx = S.pos[a * 3] - S.pos[b * 3], dy = S.pos[a * 3 + 1] - S.pos[b * 3 + 1], dz = S.pos[a * 3 + 2] - S.pos[b * 3 + 2];
+      const ok = dx * dx + dy * dy + dz * dz < 900;
+      for (let k = 0; k < 3; k++) { pos[f * 6 + k] = S.pos[a * 3 + k]; pos[f * 6 + 3 + k] = S.pos[(ok ? b : a) * 3 + k]; }
+      hi[f * 2] = hi[f * 2 + 1] = S.hi[a]; role[f * 2] = role[f * 2 + 1] = S.role[a];
+    }
+    filStages.push({ pos, hi, role });
+  }
+}
+
+function useSegment(k) {
+  // upload the "from" and "to" shapes of the transition we're in
+  if (k === seg) return;
+  seg = k;
+  const A = stages[k], B = stages[Math.min(k + 1, stages.length - 1)];
+  const g = points.geometry;
+  g.attributes.position.array.set(A.pos); g.attributes.aTo.array.set(B.pos);
+  g.attributes.aRoleF.array.set(A.role); g.attributes.aRoleT.array.set(B.role);
+  g.attributes.aHiF.array.set(A.hi); g.attributes.aHiT.array.set(B.hi);
+  for (const n of ["position", "aTo", "aRoleF", "aRoleT", "aHiF", "aHiT"]) g.attributes[n].needsUpdate = true;
+  const FA = filStages[k], FB = filStages[Math.min(k + 1, stages.length - 1)], lg = lines.geometry;
+  lg.attributes.position.array.set(FA.pos); lg.attributes.aTo.array.set(FB.pos);
+  lg.attributes.aRoleF.array.set(FA.role); lg.attributes.aRoleT.array.set(FB.role);
+  lg.attributes.aHiF.array.set(FA.hi); lg.attributes.aHiT.array.set(FB.hi);
+  for (const n of ["position", "aTo", "aRoleF", "aRoleT", "aHiF", "aHiT"]) lg.attributes[n].needsUpdate = true;
+  uniforms.uFrom.value = k; uniforms.uTo.value = Math.min(k + 1, stages.length - 1);
+}
+
+function makeGeometry(count, seeds) {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(count * 3), 3));
+  g.setAttribute("aTo", new THREE.BufferAttribute(new Float32Array(count * 3), 3));
+  for (const n of ["aRoleF", "aRoleT", "aHiF", "aHiT"]) g.setAttribute(n, new THREE.BufferAttribute(new Float32Array(count), 1));
+  g.setAttribute("aSeed", new THREE.BufferAttribute(seeds, 1));
+  return g;
+}
+
+// every shape is about 600 units wide: step back until that fits the screen's width
+function camDistance() { return Math.max(470, 760 / (innerWidth / innerHeight)); }
+
+function init() {
+  scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(42, innerWidth / innerHeight, 10, 4000);
+  camera.position.set(0, 0, camDistance());
+  renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+  renderer.setSize(innerWidth, innerHeight);
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.setClearColor(0x0a0a0a, 1);
+  document.getElementById("webgl").appendChild(renderer.domElement);
+
+  stages = [stageGalaxy(), stageStatement(), stageFact(), stageMachine(), stageTimeline(), stageForest(), stageVerdict(), stageClaims()];
+  buildFilaments();
+
+  uniforms = {
+    uTime: { value: 0 }, uMix: { value: 0 }, uVelocity: { value: 0 }, uFrom: { value: 0 }, uTo: { value: 1 },
+    uPointSize: { value: 1.3 * Math.min(devicePixelRatio, 2) }, uGrain: { value: 0.55 }, uCurl: { value: 0.55 },
+    uDensity: { value: 1.0 }, uGlow: { value: 0.7 }, uMouse: { value: new THREE.Vector3(0, 0, 9999) },
+    uZoom: { value: camDistance() / 470 },
+  };
+  const seeds = new Float32Array(N); for (let i = 0; i < N; i++) seeds[i] = rand();
+  seeds[STMT] = 0;                                   // Exhibit A survives any density setting
+  points = new THREE.Points(makeGeometry(N, seeds), new THREE.ShaderMaterial({
+    vertexShader, fragmentShader, uniforms, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+  const fSeeds = new Float32Array(FILAMENTS * 2); for (let i = 0; i < fSeeds.length; i++) fSeeds[i] = rand();
+  lines = new THREE.LineSegments(makeGeometry(FILAMENTS * 2, fSeeds), new THREE.ShaderMaterial({
+    vertexShader, fragmentShader: lineFragment, uniforms, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+  scene.add(points, lines);
+  useSegment(0);
+}
+
+/* ---- Exhibit A's marker: the same idle motion as the shader, projected to the screen ---- */
+const marker = document.getElementById("marker");
+function placeMarker(t) {
+  const show = morph < 0.35;
+  marker.style.opacity = show ? String(1 - morph / 0.35) : "0";
+  marker.style.visibility = show ? "visible" : "hidden";
+  if (!show) return;
+  const S = stages[0];
+  let x = S.pos[0], y = S.pos[1], z = S.pos[2];
+  [x, z] = rotY(x, z, t * 0.05);
+  const a = -1.08, c = Math.cos(a), s = Math.sin(a);
+  [y, z] = [y * c - z * s, y * s + z * c];
+  const v = new THREE.Vector3(x, y, z).applyEuler(points.rotation).project(camera);
+  marker.style.left = `${(v.x + 1) / 2 * innerWidth}px`;
+  marker.style.top = `${(1 - v.y) / 2 * innerHeight}px`;
+}
+
+/* ---- film grain (from the skeleton) ------------------------------------------------------- */
+const grain = document.getElementById("grain"), gctx = grain.getContext("2d");
+const tile = document.createElement("canvas"); tile.width = tile.height = 160;
+const tctx = tile.getContext("2d"), timg = tctx.createImageData(160, 160);
+function drawGrain(frame) {
+  if (frame % 2 === 0) {
+    for (let i = 0; i < timg.data.length; i += 4) { const v = (Math.random() * 255) | 0; timg.data[i] = timg.data[i + 1] = timg.data[i + 2] = v; timg.data[i + 3] = 255; }
+    tctx.putImageData(timg, 0, 0);
+  }
+  gctx.clearRect(0, 0, grain.width, grain.height);
+  gctx.save(); gctx.translate(-((Math.random() * 160) | 0), -((Math.random() * 160) | 0));
+  gctx.fillStyle = gctx.createPattern(tile, "repeat"); gctx.fillRect(0, 0, grain.width + 160, grain.height + 160);
+  gctx.restore();
+}
+
+/* ---- scroll → morph: shapes hold during their scene, change during the slides ------------ */
+const sceneEls = [...document.querySelectorAll("[data-scene]")];
+const slideEls = [...document.querySelectorAll(".slide")];
+function readScroll() {
+  const mid = scrollY + innerHeight / 2;
+  let m = 0;
+  for (let j = 0; j < slideEls.length; j++) {
+    const el = slideEls[j], top = el.offsetTop, h = el.offsetHeight;
+    if (mid >= top + h) m = j + 1;
+    else { if (mid > top) m = j + (mid - top) / h; break; }
+  }
+  targetMorph = m;
+}
+
+const dotsEl = document.getElementById("dots");
+SCENES.forEach((name, i) => {
+  const b = document.createElement("button");
+  b.className = "dot"; b.innerHTML = `<span>${String(i).padStart(2, "0")} ${name}</span>`;
+  b.onclick = () => scrollTo({ top: sceneEls[i].offsetTop - (i ? innerHeight * 0.15 : 0), behavior: "smooth" });
+  dotsEl.appendChild(b);
 });
-$("#runBtn").onclick = run;
-$("#loadDemo").onclick = () => $("#input").value = DEMO.join("\n");
-$("#loadSample").onclick = async () => {
-  const j = await (await fetch(API + "/api/sample")).json();
-  if (!j.rows.length) { $("#input").value = ""; $("#input").placeholder = j.note || "No sample yet."; return; }
-  $("#input").value = j.rows.map((r) => `${r.date} | ${r.text}`).join("\n");
-};
-async function health() {
-  try { const h = await (await fetch(API + "/api/health")).json();
-    $("#dot").classList.toggle("ok", !!h.warm);
-    $("#statusText").textContent = h.warm ? "engine ready" : "engine warming up (about a minute)…";
-    if (!h.warm) setTimeout(health, 3000);
-  } catch { $("#statusText").textContent = "API offline — start: uvicorn server.app:app --port 8000"; setTimeout(health, 4000); }
+const stepNow = document.getElementById("stepNow"), bar = document.getElementById("bar");
+let lastStep = -1;
+function hud() {
+  const k = Math.round(morph);
+  if (k !== lastStep) {
+    lastStep = k;
+    stepNow.innerHTML = `${String(k).padStart(2, "0")} / <span>${SCENES[k]}</span>`;
+    [...dotsEl.children].forEach((d, i) => d.classList.toggle("on", i === k));
+  }
+  bar.style.height = `${(morph / (SCENES.length - 1)) * 100}%`;
 }
-drawDiagram(); health();
-$("#input").value = DEMO.join("\n");
+
+const revealer = new IntersectionObserver(es => es.forEach(e => e.target.classList.toggle("in", e.isIntersecting)), { threshold: 0.2 });
+document.querySelectorAll("section").forEach(s => revealer.observe(s));
+
+/* ---- loop --------------------------------------------------------------------------------- */
+let frame = 0;
+function loop(now) { requestAnimationFrame(loop); tick(now); }
+function tick(now) {
+  frame++;
+  const t = now * 0.001;
+  uniforms.uTime.value = t;
+  morph += (targetMorph - morph) * 0.06;
+  velocity += (Math.abs(morph - prevMorph) - velocity) * 0.12;
+  prevMorph = morph;
+  const k = Math.min(Math.floor(morph), stages.length - 2);
+  useSegment(k);
+  uniforms.uMix.value = morph - k;
+  uniforms.uVelocity.value = velocity;
+  mouse.sx += (mouse.x - mouse.sx) * 0.05; mouse.sy += (mouse.y - mouse.sy) * 0.05;
+  points.rotation.set(-mouse.sy * 0.28, mouse.sx * 0.38, 0); lines.rotation.copy(points.rotation);
+  hud(); placeMarker(t);
+  renderer.render(scene, camera);
+  drawGrain(frame);
+}
+
+function cursor(cx, cy) {
+  mouse.x = cx / innerWidth * 2 - 1; mouse.y = -(cy / innerHeight) * 2 + 1;
+  const v = new THREE.Vector3(mouse.x, mouse.y, 0.5).unproject(camera).sub(camera.position).normalize();
+  uniforms.uMouse.value.copy(camera.position.clone().add(v.multiplyScalar(-camera.position.z / v.z)));
+}
+addEventListener("scroll", readScroll, { passive: true });
+addEventListener("resize", () => {
+  camera.aspect = innerWidth / innerHeight; camera.position.z = camDistance(); camera.updateProjectionMatrix();
+  uniforms.uZoom.value = camDistance() / 470;
+  renderer.setSize(innerWidth, innerHeight); grain.width = innerWidth; grain.height = innerHeight; readScroll();
+});
+addEventListener("mousemove", e => cursor(e.clientX, e.clientY));
+addEventListener("touchmove", e => e.touches[0] && cursor(e.touches[0].clientX, e.touches[0].clientY), { passive: true });
+document.addEventListener("mouseleave", () => uniforms && uniforms.uMouse.value.set(0, 0, 9999));
+
+/* ---- the original GRAIN params panel, collapsed by default -------------------------------- */
+function controls() {
+  const fx = document.getElementById("fx"), tg = document.getElementById("fxToggle");
+  tg.onclick = () => { fx.classList.toggle("open"); tg.textContent = `Grain · params [ ${fx.classList.contains("open") ? "-" : "+"} ]`; };
+  const bind = (id, out, fn, fmt) => document.getElementById(id).addEventListener("input", e => {
+    const v = +e.target.value; fn(v); document.getElementById(out).textContent = fmt(v); });
+  bind("cGrain", "vGrain", v => { uniforms.uGrain.value = v / 100; grain.style.opacity = (v / 100 * 0.24).toFixed(3); }, v => (v / 100).toFixed(2));
+  bind("cDensity", "vDensity", v => uniforms.uDensity.value = v / 100, v => `${v}%`);
+  bind("cSize", "vSize", v => uniforms.uPointSize.value = v / 100 * Math.min(devicePixelRatio, 2), v => (v / 100).toFixed(2));
+  bind("cCurl", "vCurl", v => uniforms.uCurl.value = v / 100, v => (v / 100).toFixed(2));
+  bind("cGlow", "vGlow", v => uniforms.uGlow.value = v / 100, v => (v / 100).toFixed(2));
+}
+
+window.__step = n => { for (let i = 0; i < n; i++) tick(performance.now()); };  // draw n frames by hand (a hidden tab pauses requestAnimationFrame)
+
+(async () => {
+  // the shapes made of words need the font first (falls back after 2.5 s)
+  try { await Promise.race([document.fonts.load(`800 150px Figtree`), new Promise(r => setTimeout(r, 2500))]); } catch (e) {}
+  grain.width = innerWidth; grain.height = innerHeight;
+  init(); controls(); readScroll();
+  requestAnimationFrame(loop);
+})();
 </script>
 </body>
 </html>

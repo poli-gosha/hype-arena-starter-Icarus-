@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Polygraph · Team Icarus</title>
+<style>
+  :root {
+    --bg: #07080a; --panel: #0e1014; --panel2: #13161c; --line: #232833; --text: #d9dee8; --dim: #7c8596;
+    --true: #39ff88; --false: #ff3b5c; --unsure: #ffb020; --accent: #59c3ff;
+    --mono: "JetBrains Mono", "IBM Plex Mono", Consolas, "SF Mono", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--mono); font-size: 14px; }
+  body::after { /* faint scanlines */
+    content: ""; position: fixed; inset: 0; pointer-events: none;
+    background: repeating-linear-gradient(0deg, rgba(255,255,255,.018) 0 1px, transparent 1px 3px);
+  }
+  header { display: flex; align-items: center; gap: 16px; padding: 14px 22px; border-bottom: 1px solid var(--line); }
+  .logo { font-weight: 700; letter-spacing: .18em; font-size: 18px; }
+  .logo b { color: var(--false); } .logo i { color: var(--true); font-style: normal; }
+  .tag { color: var(--dim); font-size: 12px; }
+  .status { margin-left: auto; font-size: 12px; color: var(--dim); display: flex; align-items: center; gap: 8px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--unsure); box-shadow: 0 0 8px var(--unsure); }
+  .dot.ok { background: var(--true); box-shadow: 0 0 8px var(--true); }
+  nav { display: flex; gap: 4px; padding: 0 22px; border-bottom: 1px solid var(--line); }
+  nav button { background: none; border: 0; color: var(--dim); font: inherit; padding: 12px 14px; cursor: pointer; border-bottom: 2px solid transparent; }
+  nav button.on { color: var(--text); border-bottom-color: var(--accent); }
+  main { padding: 18px 22px 40px; max-width: 1500px; margin: 0 auto; }
+  section { display: none; } section.on { display: block; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+  h2 { font-size: 12px; letter-spacing: .14em; color: var(--dim); font-weight: 600; margin: 0 0 12px; text-transform: uppercase; }
+
+  /* architecture diagram */
+  #diagram svg { width: 100%; height: auto; display: block; }
+  .node rect { fill: var(--panel2); stroke: var(--line); stroke-width: 1.2; rx: 10; transition: all .35s; }
+  .node.lit rect { stroke: var(--accent); fill: #10202c; filter: drop-shadow(0 0 8px rgba(89,195,255,.55)); }
+  .node.done rect { stroke: #2d6a4f; }
+  .node .t { fill: var(--text); font-size: 13px; font-weight: 700; }
+  .node .s { fill: var(--dim); font-size: 10.5px; }
+  .node .m { fill: var(--accent); font-size: 11px; }
+  .edge { stroke: var(--line); stroke-width: 2; fill: none; }
+  .edge.lit { stroke: var(--accent); stroke-dasharray: 6 6; animation: flow .6s linear infinite; }
+  @keyframes flow { to { stroke-dashoffset: -12; } }
+
+  .grid { display: grid; grid-template-columns: 380px 1fr; gap: 16px; margin-top: 16px; }
+  @media (max-width: 1000px) { .grid { grid-template-columns: 1fr; } }
+  textarea { width: 100%; min-height: 230px; background: var(--bg); color: var(--text); border: 1px solid var(--line);
+    border-radius: 8px; padding: 10px; font: 12px/1.5 var(--mono); resize: vertical; }
+  .btns { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+  .btn { background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 9px 14px;
+    font: inherit; cursor: pointer; }
+  .btn:hover { border-color: var(--accent); }
+  .btn.go { background: var(--accent); color: #031018; border-color: var(--accent); font-weight: 700; }
+  .btn:disabled { opacity: .5; cursor: wait; }
+  .hint { color: var(--dim); font-size: 11.5px; margin-top: 8px; line-height: 1.5; }
+  .summary { display: flex; gap: 18px; margin-bottom: 12px; font-size: 13px; color: var(--dim); flex-wrap: wrap; }
+  .summary b { font-size: 20px; margin-right: 6px; }
+
+  /* verdict rows */
+  .row { display: grid; grid-template-columns: 112px 1fr 120px; gap: 14px; align-items: center; padding: 12px;
+    border: 1px solid var(--line); border-radius: 10px; margin-bottom: 8px; background: var(--panel2); cursor: pointer; }
+  .row:hover { border-color: #3a4252; }
+  .row.sel { border-color: var(--accent); }
+  .stamp { font-weight: 800; letter-spacing: .12em; font-size: 15px; text-align: center; padding: 6px 4px; border: 2px solid;
+    border-radius: 6px; transform: rotate(-4deg); }
+  .stamp.true { color: var(--true); border-color: var(--true); text-shadow: 0 0 8px rgba(57,255,136,.6); }
+  .stamp.false { color: var(--false); border-color: var(--false); text-shadow: 0 0 8px rgba(255,59,92,.6); }
+  .stamp.unsure { color: var(--unsure); border-color: var(--unsure); }
+  .stamp.wait { color: var(--dim); border-color: var(--line); transform: none; }
+  .txt { font-size: 13.5px; line-height: 1.45; }
+  .txt .d { color: var(--dim); font-size: 11px; margin-right: 8px; }
+  .why { color: var(--dim); font-size: 11.5px; margin-top: 4px; }
+  .chips { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 5px; }
+  .chip { font-size: 10.5px; padding: 2px 7px; border-radius: 99px; border: 1px solid var(--line); color: var(--dim); }
+  .chip.agrees { color: var(--true); border-color: rgba(57,255,136,.4); }
+  .chip.stale, .chip.premature, .chip.invented { color: var(--false); border-color: rgba(255,59,92,.45); }
+  .gauge { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; margin-top: 6px; }
+  .gauge i { display: block; height: 100%; }
+  .conf { text-align: right; font-size: 12px; color: var(--dim); }
+  .conf b { font-size: 18px; color: var(--text); }
+  .needle { height: 26px; }
+
+  /* evidence */
+  #evidence .fact { margin-bottom: 18px; }
+  #evidence .fact h3 { font-size: 13px; margin: 0 0 4px; }
+  #evidence .fact p { margin: 0 0 6px; color: var(--dim); font-size: 12px; }
+  .tl svg { width: 100%; height: auto; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; }
+  .legend { display: flex; gap: 14px; font-size: 11px; color: var(--dim); margin-top: 6px; flex-wrap: wrap; }
+  .legend span::before { content: "●"; margin-right: 5px; }
+  .legend .lt::before { color: var(--true); } .legend .lf::before { color: var(--false); }
+  .legend .lu::before { color: #8a93a6; } .legend .lr::before { color: var(--accent); }
+
+  /* claims */
+  .filters { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
+  .filters button.on { border-color: var(--accent); color: var(--accent); }
+  .claim { padding: 10px 12px; border-bottom: 1px solid var(--line); display: grid; grid-template-columns: 86px 1fr 60px; gap: 12px; align-items: baseline; }
+  .claim .ty { font-size: 11px; color: var(--accent); text-transform: uppercase; letter-spacing: .08em; }
+  .claim .src { color: var(--dim); font-size: 11px; margin-top: 3px; }
+  .claim .c { text-align: right; color: var(--true); }
+  .empty { color: var(--dim); padding: 30px; text-align: center; }
+  .principles { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin-top: 16px; }
+  .principles .card p { color: var(--dim); line-height: 1.55; margin: 0; font-size: 12.5px; }
+  .principles .card h3 { margin: 0 0 6px; font-size: 13px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo"><b>HYPE</b> ⁄ <i>TRUTH</i> · POLYGRAPH</div>
+  <div class="tag">Team Icarus · a lie detector for Hooly · no LLM at run time</div>
+  <div class="status"><span class="dot" id="dot"></span><span id="statusText">connecting…</span></div>
+</header>
+<nav>
+  <button class="on" data-tab="run">Live run</button>
+  <button data-tab="claims">Claim forge</button>
+  <button data-tab="how">How it works</button>
+</nav>
+<main>
+  <div class="card" id="diagram"><h2>Architecture · the system as it runs</h2><div id="svgwrap"></div></div>
+
+  <section class="on" id="tab-run">
+    <div class="grid">
+      <div class="card">
+        <h2>Rows to judge</h2>
+        <textarea id="input" spellcheck="false" placeholder="One row per line:  date | sentence&#10;2026-09-08 | Hooly Jules works in 8 languages."></textarea>
+        <div class="btns">
+          <button class="btn" id="loadSample">Load sample.csv</button>
+          <button class="btn" id="loadDemo">Load demo rows</button>
+          <button class="btn go" id="runBtn">▶ Run polygraph</button>
+        </div>
+        <div class="hint">Each row is judged against a year of Hooly's pages: 1,900 labelled practice rows and their timelines. Click a verdict to see the evidence.</div>
+      </div>
+      <div>
+        <div class="card">
+          <h2>Verdicts</h2>
+          <div class="summary" id="summary"></div>
+          <div id="rows"><div class="empty">Load rows and press Run.</div></div>
+        </div>
+        <div class="card" id="evidence" style="margin-top:16px"><h2>Evidence board</h2><div id="evBody" class="empty">Click a verdict.</div></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="tab-claims">
+    <div class="card" style="margin-top:16px">
+      <h2>1,000 new claims · each one read back by our referee clone</h2>
+      <div class="filters" id="filters"></div>
+      <div id="claims" class="empty">Loading claims… (the first time takes about a minute)</div>
+    </div>
+  </section>
+
+  <section id="tab-how">
+    <div class="principles" id="principles"></div>
+  </section>
+</main>
+
+<script>
+const API = "";
+const STAGES = [
+  { id: "linker", name: "Linker", sub: "which Hooly subjects" },
+  { id: "reader", name: "Reader", sub: "values, as the referee reads" },
+  { id: "attributor", name: "Attributor", sub: "trained: value → fact" },
+  { id: "truth", name: "Truth engine", sub: "timelines × page trust" },
+  { id: "judge", name: "Judge", sub: "trained: true / false / unsure" },
+  { id: "forge", name: "Claim forge", sub: "1,000 true claims" },
+];
+const DEMO = [
+  "2026-09-08 | Hooly Jules works in 8 languages.",
+  "2026-10-20 | Hooly AI Pro costs €59 per month.",
+  "2026-06-10 | Gavin: Hooly Gemini speaks 40 languages, which is more than any competitor.",
+  "2025-11-14 | Hooly Gemini handles 22 formats.",
+  "2026-10-26 | Hooly Gemini scored 99.6% last quarter",
+  "2026-06-26 | Its inner screen is 8 inch, and the battery of Hooly Pixel Fold is 4,700 mAh.",
+];
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+/* ---------- architecture diagram ---------- */
+function drawDiagram() {
+  const W = 1180, H = 150, n = STAGES.length, bw = 160, gap = (W - 40 - n * bw) / (n - 1);
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Pipeline">`;
+  s += `<text x="20" y="18" fill="#7c8596" font-size="11">universe.csv · ~20,000 rows</text>`;
+  s += `<text x="${W - 20}" y="18" fill="#7c8596" font-size="11" text-anchor="end">output.csv · labels + 1,000 claims</text>`;
+  STAGES.forEach((st, i) => {
+    const x = 20 + i * (bw + gap), y = 34;
+    if (i) s += `<path class="edge" id="e-${st.id}" d="M${x - gap + 2} ${y + 46} L${x - 4} ${y + 46}"/>`;
+    s += `<g class="node" id="n-${st.id}"><rect x="${x}" y="${y}" width="${bw}" height="92"/>
+      <text class="t" x="${x + 12}" y="${y + 24}">${i + 1}. ${st.name}</text>
+      <text class="s" x="${x + 12}" y="${y + 44}">${st.sub}</text>
+      <text class="m" x="${x + 12}" y="${y + 74}" id="m-${st.id}">·</text></g>`;
+  });
+  $("#svgwrap").innerHTML = s + "</svg>";
+}
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+async function animate(stages) {
+  const by = Object.fromEntries((stages || []).map((s) => [s.name, s]));
+  for (const st of STAGES) {
+    document.querySelectorAll(".node").forEach((n) => n.classList.remove("lit"));
+    $(`#n-${st.id}`).classList.add("lit");
+    const e = $(`#e-${st.id}`); if (e) e.classList.add("lit");
+    const m = by[st.id];
+    $(`#m-${st.id}`).textContent = m ? `${m.count.toLocaleString()} · ${m.ms < 1000 ? Math.round(m.ms) + " ms" : (m.ms / 1000).toFixed(1) + " s"}` : "—";
+    await sleep(260);
+    $(`#n-${st.id}`).classList.add("done");
+  }
+  document.querySelectorAll(".node").forEach((n) => n.classList.remove("lit"));
+  document.querySelectorAll(".edge").forEach((e) => e.classList.remove("lit"));
+}
+function pulseWaiting(on) {
+  if (!on) return;
+  let i = 0;
+  const t = setInterval(() => {
+    if (!pulseWaiting.busy) { clearInterval(t); return; }
+    document.querySelectorAll(".node").forEach((n) => n.classList.remove("lit"));
+    $(`#n-${STAGES[i % STAGES.length].id}`).classList.add("lit"); i++;
+  }, 300);
+}
+
+/* ---------- values ---------- */
+function fmt(v) {
+  if (!v) return "";
+  const n = (x) => typeof x === "number" ? x.toLocaleString("en-US", { maximumFractionDigits: 3 }) : x;
+  const cur = { EUR: "€", USD: "$", GBP: "£" };
+  switch (v.kind) {
+    case "money": return `${cur[v.currency] || v.currency + " "}${n(v.value)}${v.per ? " / " + v.per : ""}`;
+    case "quantity": return `${n(v.value)} ${v.unit}${v.value === 1 || /^[A-Z]/.test(v.unit) || ["m","g","kg","km","cm","mm","in","mAh"].includes(v.unit) ? "" : "s"}`;
+    case "duration": return `${n(v.value)} ${v.unit}`;
+    case "percent": return `${n(v.value)}%`;
+    case "version": return `v${v.value}`;
+    case "boolean": return v.value ? "yes" : "no";
+    default: return String(v.value);
+  }
+}
+const STATUS_WORDS = { agrees: "holds on this date", stale: "was true earlier — stale", premature: "only true later — premature",
+  invented: "never true in the timeline", unknown: "no other evidence" };
+
+/* ---------- run ---------- */
+let LAST = null;
+function parseInput() {
+  return $("#input").value.split("\n").map((l) => l.trim()).filter(Boolean).map((l, i) => {
+    const m = l.match(/^(\d{4}-\d{2}-\d{2})\s*[|,;\t]\s*(.+)$/);
+    return m ? { id: `r-${i + 1}`, date: m[1], text: m[2] } : { id: `r-${i + 1}`, date: "2026-10-28", text: l };
+  });
+}
+async function run() {
+  const rows = parseInput();
+  if (!rows.length) return;
+  $("#runBtn").disabled = true;
+  $("#rows").innerHTML = rows.map((r) => rowHtml({ ...r, verdict: "wait" })).join("");
+  $("#evBody").className = "empty"; $("#evBody").textContent = "Judging…";
+  pulseWaiting.busy = true; pulseWaiting(true);
+  try {
+    const res = await fetch(API + "/api/run", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rows }) });
+    if (!res.ok) throw new Error(await res.text());
+    LAST = await res.json();
+  } catch (e) {
+    pulseWaiting.busy = false; $("#runBtn").disabled = false;
+    $("#rows").innerHTML = `<div class="empty">Run failed: ${esc(e.message).slice(0, 300)}</div>`; return;
+  }
+  pulseWaiting.busy = false;
+  await animate(LAST.stages);
+  $("#runBtn").disabled = false;
+  const c = { true: 0, false: 0, unsure: 0 };
+  LAST.rows.forEach((r) => c[r.verdict] = (c[r.verdict] || 0) + 1);
+  $("#summary").innerHTML = `<span><b style="color:var(--true)">${c.true}</b>true</span><span><b style="color:var(--false)">${c.false}</b>false</span><span><b style="color:var(--unsure)">${c.unsure}</b>unsure</span>`;
+  $("#rows").innerHTML = "";
+  for (const r of LAST.rows) { $("#rows").insertAdjacentHTML("beforeend", rowHtml(r)); await sleep(70); }
+  document.querySelectorAll(".row").forEach((el) => el.onclick = () => select(el.dataset.id));
+  const firstFalse = LAST.rows.find((r) => r.verdict === "false") || LAST.rows[0];
+  if (firstFalse) select(firstFalse.id);
+}
+function rowHtml(r) {
+  const col = { true: "var(--true)", false: "var(--false)", unsure: "var(--unsure)" }[r.verdict] || "var(--line)";
+  const conf = r.confidence == null ? null : Math.round(r.confidence * 100);
+  const chips = (r.facts || []).map((f) => `<span class="chip ${f.status}">${esc(f.subject)} · ${esc(f.attribute.replace(/_/g, " "))} = ${esc(fmt(f.value))}</span>`).join("");
+  return `<div class="row" data-id="${esc(r.id)}">
+    <div class="stamp ${r.verdict}">${r.verdict === "wait" ? "· · ·" : r.verdict.toUpperCase()}</div>
+    <div><div class="txt"><span class="d">${esc(r.date)}</span>${esc(r.text)}</div>
+      ${r.why ? `<div class="why">→ ${esc(r.why)}</div>` : ""}<div class="chips">${chips}</div></div>
+    <div class="conf">${conf == null ? (r.verdict === "unsure" ? "no confidence" : "") : `<b>${conf}%</b> sure`}
+      <div class="gauge"><i style="width:${conf ?? 0}%;background:${col}"></i></div></div></div>`;
+}
+
+/* ---------- evidence ---------- */
+function select(id) {
+  document.querySelectorAll(".row").forEach((el) => el.classList.toggle("sel", el.dataset.id === id));
+  const r = LAST.rows.find((x) => x.id === id); if (!r) return;
+  const ev = $("#evBody"); ev.className = "";
+  if (!r.facts || !r.facts.length) {
+    ev.innerHTML = `<p class="why">No fact was extracted from this sentence, so it was judged on its page and its wording. ${esc(r.why)}</p>`; return;
+  }
+  ev.innerHTML = r.facts.map((f, i) => {
+    const tl = LAST.timelines[`${f.subject}|${f.attribute}`];
+    return `<div class="fact"><h3>${esc(f.subject)} · ${esc(f.attribute.replace(/_/g, " "))}: <span style="color:${f.status === "agrees" ? "var(--true)" : ["stale","premature","invented"].includes(f.status) ? "var(--false)" : "var(--dim)"}">${esc(fmt(f.value))}</span></h3>
+      <p>This row says ${esc(fmt(f.value))} on ${esc(r.date)}: ${STATUS_WORDS[f.status] || f.status}.</p>
+      <div class="tl">${tl ? timeline(tl, f, r.date) : '<div class="empty">no timeline</div>'}</div></div>`;
+  }).join("") + `<div class="legend"><span class="lt">labelled true</span><span class="lf">labelled false</span><span class="lu">unlabelled row</span><span class="lr">this row</span></div>`;
+}
+function timeline(tl, f, day) {
+  const W = 900, H = 170, L = 60, R = 20, T = 18, B = 34;
+  const t0 = Date.parse("2025-10-01"), t1 = Date.parse("2026-11-01");
+  const X = (d) => L + (W - L - R) * (Date.parse(d) - t0) / (t1 - t0);
+  const vals = []; const key = (v) => JSON.stringify(v);
+  [...tl.steps.map((s) => s.value), ...tl.mentions.map((m) => m.value), f.value].forEach((v) => { if (!vals.some((x) => key(x) === key(v))) vals.push(v); });
+  const Y = (v) => T + (H - T - B) * (vals.length === 1 ? .5 : vals.findIndex((x) => key(x) === key(v)) / (vals.length - 1));
+  let s = `<svg viewBox="0 0 ${W} ${H}">`;
+  for (let m = 0; m <= 13; m += 2) { const d = new Date(2025, 9 + m, 1); const x = X(d.toISOString().slice(0, 10));
+    s += `<line x1="${x}" y1="${T - 6}" x2="${x}" y2="${H - B + 4}" stroke="#1a1e26"/><text x="${x}" y="${H - 12}" fill="#5d6577" font-size="10" text-anchor="middle">${d.toLocaleString("en", { month: "short" })} ${String(d.getFullYear()).slice(2)}</text>`; }
+  vals.forEach((v) => s += `<text x="${L - 8}" y="${Y(v) + 4}" fill="#7c8596" font-size="10.5" text-anchor="end">${esc(fmt(v)).slice(0, 12)}</text>`);
+  tl.steps.forEach((st, i) => { const x0 = X(st.from), x1 = st.to ? X(st.to) : X("2026-10-29"), y = Y(st.value);
+    s += `<line x1="${x0}" y1="${y}" x2="${x1}" y2="${y}" stroke="#39ff88" stroke-width="3" opacity=".75"/>`;
+    const nx = tl.steps[i + 1]; if (nx) s += `<line x1="${x1}" y1="${y}" x2="${x1}" y2="${Y(nx.value)}" stroke="#39ff88" stroke-width="1.5" stroke-dasharray="3 3" opacity=".6"/>`; });
+  tl.mentions.forEach((m) => { const c = m.verdict === "true" ? "#39ff88" : m.verdict === "false" ? "#ff3b5c" : "#8a93a6";
+    s += `<circle cx="${X(m.date)}" cy="${Y(m.value)}" r="4.5" fill="${c}" fill-opacity=".85"/>`; });
+  s += `<circle cx="${X(day)}" cy="${Y(f.value)}" r="9" fill="none" stroke="#59c3ff" stroke-width="2.5"/><line x1="${X(day)}" y1="${T - 6}" x2="${X(day)}" y2="${H - B + 4}" stroke="#59c3ff" stroke-dasharray="2 4"/>`;
+  return s + "</svg>";
+}
+
+/* ---------- claims ---------- */
+let CLAIMS = [], FILTER = "all";
+async function loadClaims() {
+  if (CLAIMS.length) return;
+  try { CLAIMS = (await (await fetch(API + "/api/claims")).json()).claims; } catch (e) { $("#claims").textContent = "Could not load claims."; return; }
+  const types = ["all", "fact", "compare", "change", "at_event", "relation"];
+  $("#filters").innerHTML = types.map((t) => `<button class="btn ${t === FILTER ? "on" : ""}" data-t="${t}">${t} · ${t === "all" ? CLAIMS.length : CLAIMS.filter((c) => c.type === t).length}</button>`).join("");
+  document.querySelectorAll("#filters button").forEach((b) => b.onclick = () => { FILTER = b.dataset.t; document.querySelectorAll("#filters button").forEach((x) => x.classList.toggle("on", x === b)); showClaims(); });
+  showClaims();
+}
+function showClaims() {
+  const list = CLAIMS.filter((c) => FILTER === "all" || c.type === FILTER).slice(0, 400);
+  $("#claims").className = "";
+  $("#claims").innerHTML = list.map((c) => `<div class="claim"><div class="ty">${c.type.replace("_", " ")}</div>
+    <div>${esc(c.text)}<div class="src">connects: ${c.sources.map((s) => esc(s.subject) + " · " + esc(s.attribute.replace(/_/g, " "))).join("  ⟷  ")}</div></div>
+    <div class="c">${Math.round(c.confidence * 100)}%</div></div>`).join("");
+}
+
+/* ---------- how it works ---------- */
+const PRINCIPLES = [
+  ["Every sentence is a set of facts", "“Hooly Jules works in 8 languages” is the fact (Hooly Jules, programming languages, 8). Our reader parses values exactly as the referee's published rules do; a model trained on the practice rows decides which fact each value is about."],
+  ["Every fact is a staircase in time", "Prices change, teams grow. For each fact we fit its timeline over a year of pages with dynamic programming: a lone lie is outvoted, a real change repeated by later pages becomes a new step."],
+  ["Lies have three shapes", "Invented (never true), stale (true before), premature (true only later). The evidence board shows which, on the fact's own timeline."],
+  ["Sources earn trust", "Some pages are rumour mills. Each page's trust is learned from how well it agrees with the timelines, and feeds back into them — truth discovery, EM-style."],
+  ["Labels are anchors, not answers", "The 1,900 labelled rows pin the timelines and train the judge. Every training feature is computed out of fold, so the model learns on exactly what it sees for a new row."],
+  ["No LLM at run time", "Rules, dynamic programming and two small gradient-boosted models: explainable, offline, 20,000 rows in about two minutes on 2 CPUs."],
+  ["Claims are proven before they ship", "1,000 claims are built from confirmed timeline steps, then read back by our clone of the referee. 985 of 1,000 check out as true on held-out data, 0 rejected."],
+];
+$("#principles").innerHTML = PRINCIPLES.map(([h, p]) => `<div class="card"><h3>${h}</h3><p>${p}</p></div>`).join("");
+
+/* ---------- wiring ---------- */
+document.querySelectorAll("nav button").forEach((b) => b.onclick = () => {
+  document.querySelectorAll("nav button").forEach((x) => x.classList.toggle("on", x === b));
+  document.querySelectorAll("section").forEach((s) => s.classList.toggle("on", s.id === "tab-" + b.dataset.tab));
+  if (b.dataset.tab === "claims") loadClaims();
+});
+$("#runBtn").onclick = run;
+$("#loadDemo").onclick = () => $("#input").value = DEMO.join("\n");
+$("#loadSample").onclick = async () => {
+  const j = await (await fetch(API + "/api/sample")).json();
+  if (!j.rows.length) { $("#input").value = ""; $("#input").placeholder = j.note || "No sample yet."; return; }
+  $("#input").value = j.rows.map((r) => `${r.date} | ${r.text}`).join("\n");
+};
+async function health() {
+  try { const h = await (await fetch(API + "/api/health")).json();
+    $("#dot").classList.toggle("ok", !!h.warm);
+    $("#statusText").textContent = h.warm ? "engine ready" : "engine warming up (about a minute)…";
+    if (!h.warm) setTimeout(health, 3000);
+  } catch { $("#statusText").textContent = "API offline — start: uvicorn server.app:app --port 8000"; setTimeout(health, 4000); }
+}
+drawDiagram(); health();
+$("#input").value = DEMO.join("\n");
+</script>
+</body>
+</html>

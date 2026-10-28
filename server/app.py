@@ -10,7 +10,8 @@ Endpoints (contract in docs/BRIEF_frontend.md):
                              returns the trace JSON for just these rows
   GET  /api/sample        -> the rows of sample/sample.csv (from 09:00 on 29 Oct), if present
   GET  /api/claims        -> the 1,000 claims the system writes on the practice universe
-The page at / is web/dist (the frontend teammate's built UI) if it exists, else server/static.
+The site at / is web/dist (a built UI) if it exists, else server/static: index.html is the
+immersive story of one statement, console.html the live console that runs the system.
 """
 from __future__ import annotations
 
