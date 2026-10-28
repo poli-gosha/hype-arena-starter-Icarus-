@@ -36,7 +36,12 @@ WORD_RE = re.compile(r"[A-Za-z][A-Za-z'’-]*")
 NAME_RE = re.compile(r"(?<![A-Za-z])(?:[A-Z][\w&'’.-]*)(?:\s+(?:of\s+|de\s+|the\s+)?[A-Z][\w&'’.-]*)*")
 KINDS = ["quantity", "money", "percent", "date", "version", "duration", "name", "boolean"]
 WINDOW = 8
-THRESHOLD = 0.15  # tuned by 5-fold CV on practice (precision 0.89, recall 0.81)
+THRESHOLD = float(__import__("os").environ.get("POLY_TH", 0.15))  # the default decision threshold
+# per value kind, tuned by 5-fold CV on practice (F1 0.853 -> 0.866, but labels 0.880 -> 0.874): a number that reads
+# cleanly is almost always a fact; a yes/no inferred from wording needs more evidence
+PER_KIND = __import__("os").environ.get("POLY_PER_KIND", "0") == "1"  # better extraction F1, worse labels: off
+THRESHOLDS = {"*": THRESHOLD, "date": 0.12, "name": 0.15, "boolean": 0.3, "quantity": 0.04,
+              "money": 0.04, "percent": 0.04, "duration": 0.04, "version": 0.08}
 
 
 @lru_cache(maxsize=50_000)  # the same sentence is split for every candidate
@@ -98,10 +103,10 @@ def _blank(text: str, spans) -> str:
 
 
 class Attributor:
-    def __init__(self, lexicon: Lexicon, threshold: float = THRESHOLD):
+    def __init__(self, lexicon: Lexicon, threshold=None):
         self.lexicon = lexicon
         self.model = None
-        self.threshold = threshold
+        self.threshold = threshold if threshold is not None else (dict(THRESHOLDS) if PER_KIND else THRESHOLD)
         self.company = lexicon.canonical("Hooly")  # "we", "our": the company itself
         # attribute-name word -> (subject, attribute): finds attributes practice never showed
         self.token_index: dict[str, list[tuple[str, str]]] = defaultdict(list)
@@ -368,8 +373,9 @@ class Attributor:
         scored.sort(key=lambda x: -x[0])
         used_span, chosen = set(), {}
         for score, sk, reading, s_, a in scored:
-            if score < threshold:
-                break
+            th = threshold.get(reading[0]["kind"], threshold.get("*", THRESHOLD)) if isinstance(threshold, dict) else threshold
+            if score < th:
+                continue
             k = (sk[0], s_, a)
             if sk in used_span or k in chosen:
                 continue

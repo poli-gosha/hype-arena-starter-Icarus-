@@ -55,6 +55,7 @@ class Linker:
         self.pattern = re.compile(r"(?<![A-Za-z0-9])(?:" + "|".join(parts) + r")(?![A-Za-z0-9]|\.\d)",
                                   re.IGNORECASE)
         self._squashed = {re.sub(r"\s+", "", k): v for k, v in lexicon.all_names().items()}
+        self._lower = {norm(n) for subj in lexicon.subjects for n in lexicon.names(subj) if n[:1].islower()}
 
     def find(self, text: str, cased: bool = False) -> list[Mention]:
         """cased=False matches like the referee (any case). cased=True is for reading input
@@ -62,13 +63,18 @@ class Linker:
         out = []
         for m in self.pattern.finditer(text):
             written = m.group(0)
-            if cased and written[0].islower():
+            if cased and written[0].islower() and not self._lower_ok(written):
                 continue
             subject = (self.lexicon.canonical(written) or self._squashed.get(re.sub(r"\s+", "", norm(written)))
                        or self.extra.get(norm(written)))
             if subject:
                 out.append(Mention(subject, m.start(), m.end(), written))
         return out
+
+    def _lower_ok(self, written: str) -> bool:
+        """A lower-case spelling still names a subject when the lexicon itself writes it in
+        lower case ("next I/O", "outage", "devices division")."""
+        return norm(written) in self._lower
 
     def link_page(self, texts: list[str]) -> list[list[Mention]]:
         """Mentions for each sentence of one page: its own, then every other subject the page
