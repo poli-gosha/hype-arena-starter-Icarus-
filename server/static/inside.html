@@ -6,67 +6,107 @@
 <title>Polygraph · Inside the machine</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg: #F5F5F1; --card: #FFFFFF; --ink: #111214; --soft: #5C6170; --line: #E2E2DC;
-    --lime: #D7F13B; --green: #1E8E4F; --green-bg: #E6F4EC; --red: #C8303F; --red-bg: #FBE9EB;
+    --bg: #F5F5F1; --card: #FFFFFF; --ink: #111214; --soft: #5C6170; --line: #E2E2DC; --dot: #D3D3CB;
+    --green: #1E8E4F; --green-bg: #E6F4EC; --red: #C8303F; --red-bg: #FBE9EB;
     --amber: #A86B00; --amber-bg: #FFF3DA; --blue: #2859B5; --blue-bg: #E8EEFA;
     --font: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif; --mono: ui-monospace, Consolas, monospace;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.5 var(--font); }
   a { color: inherit; }
-  header { display: flex; align-items: center; gap: 16px; padding: 16px 28px; border-bottom: 1px solid var(--line); background: var(--card);
-    position: sticky; top: 0; z-index: 10; }
+  header { display: flex; align-items: center; gap: 16px; padding: 14px 24px; border-bottom: 1px solid var(--line); background: var(--card); }
   header .back { text-decoration: none; color: var(--soft); font-weight: 500; }
   header .name { font-weight: 800; }
   header .note { margin-left: auto; color: var(--soft); font-size: 14px; }
-  .layout { display: grid; grid-template-columns: 320px 1fr; gap: 0; min-height: calc(100vh - 58px); }
-  aside { border-right: 1px solid var(--line); background: var(--card); padding: 18px; position: sticky; top: 58px; height: calc(100vh - 58px); overflow: auto; }
-  aside h3 { margin: 0 0 10px; font-size: 14px; text-transform: uppercase; letter-spacing: .06em; color: var(--soft); }
-  .filters { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
-  .filters button { font: 500 13px var(--font); padding: 5px 12px; border-radius: 999px; border: 1px solid var(--line); background: none; cursor: pointer; }
-  .filters button.on { background: var(--ink); color: #fff; border-color: var(--ink); }
-  .item { display: block; width: 100%; text-align: left; border: 1px solid transparent; background: none; padding: 10px; border-radius: 10px;
-    cursor: pointer; font: 14px/1.4 var(--font); color: var(--ink); }
-  .item:hover { background: var(--bg); }
-  .item.on { border-color: var(--ink); background: var(--bg); }
-  .item small { display: block; color: var(--soft); margin-top: 3px; }
-  main { padding: 28px 36px 80px; max-width: 1060px; }
+
+  /* picking a sentence */
+  .picker { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 14px 24px 0; }
+  .chips { display: flex; gap: 6px; }
+  .chips button, .nav button { font: 500 13px var(--font); padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); cursor: pointer; }
+  .chips button.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+  select { font: 14px var(--font); padding: 7px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); flex: 1; min-width: 0; max-width: 720px; }
+  .nav { display: flex; gap: 6px; }
+
+  .head { padding: 18px 24px 6px; }
+  .sub { color: var(--soft); }
+  .sentence { font-size: clamp(22px, 2.4vw, 32px); font-weight: 800; line-height: 1.25; letter-spacing: -.01em; margin: 4px 0 10px; max-width: 1100px; }
+  .verdict { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
+  .verdict .ok { color: var(--green); font-weight: 700; } .verdict .no { color: var(--red); font-weight: 700; }
+  .verdict .actions { margin-left: auto; display: flex; gap: 8px; }
+  .verdict .actions button { font: 600 14px var(--font); padding: 7px 16px; border-radius: 999px; border: 1px solid var(--ink); background: var(--card); cursor: pointer; }
   .pill { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 13px; font-weight: 600; }
   .pill.true { background: var(--green-bg); color: var(--green); } .pill.false { background: var(--red-bg); color: var(--red); }
   .pill.unsure { background: var(--amber-bg); color: var(--amber); }
-  .sentence { font-size: clamp(24px, 2.6vw, 34px); font-weight: 800; line-height: 1.25; letter-spacing: -.01em; margin: 6px 0 8px; }
-  .sub { color: var(--soft); }
-  .match { margin: 14px 0 22px; padding: 12px 16px; border-radius: 10px; background: var(--card); border: 1px solid var(--line); }
-  .match .ok { color: var(--green); font-weight: 700; } .match .no { color: var(--red); font-weight: 700; }
 
-  /* the architecture strip */
-  .strip { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin: 0 0 22px; position: sticky; top: 70px; z-index: 5;
-    background: var(--bg); padding: 8px 0; }
-  .strip div { border: 1px solid var(--line); background: var(--card); border-radius: 8px; padding: 8px 6px; text-align: center; font-size: 13px;
-    font-weight: 600; color: var(--soft); transition: all .35s; cursor: pointer; }
-  .strip div b { display: block; font-size: 11px; color: var(--soft); font-weight: 500; }
-  .strip div.on { border-color: var(--blue); color: var(--ink); box-shadow: inset 0 -3px 0 var(--blue); }
-  .strip div.done { color: var(--ink); }
+  /* the canvas */
+  .wrap { margin: 12px 24px 0; border: 1px solid var(--line); border-radius: 16px; overflow-x: auto; overflow-y: hidden; position: relative;
+    background-color: #FAFAF7; background-image: radial-gradient(var(--dot) 1.2px, transparent 1.2px); background-size: 22px 22px; }
+  .sizer { position: relative; }
+  .canvas { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+  svg.edges { position: absolute; inset: 0; overflow: visible; }
+  .edge path.base { fill: none; stroke: #C9CBC4; stroke-width: 2.2; transition: stroke .4s; }
+  .edge path.flow { fill: none; stroke: var(--blue); stroke-width: 2.6; stroke-dasharray: 7 7; opacity: 0; }
+  .edge.flowing path.flow { opacity: 1; animation: dash .5s linear infinite; }
+  .edge.done path.base { stroke: #8FC7A5; }
+  .edge circle.packet { fill: var(--blue); }
+  .edge .lab { opacity: 0; transition: opacity .35s; }
+  .edge.done .lab { opacity: 1; }
+  .edge .lab rect { fill: #fff; stroke: var(--line); }
+  .edge .lab text { font: 600 12px var(--font); fill: var(--soft); }
+  @keyframes dash { to { stroke-dashoffset: -14; } }
 
-  .stage { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 22px 24px; margin-bottom: 16px;
-    opacity: .15; transform: translateY(10px); transition: opacity .45s, transform .45s; }
-  .stage.shown { opacity: 1; transform: none; }
-  .stage h2 { margin: 0 0 4px; font-size: 19px; display: flex; gap: 10px; align-items: center; }
-  .stage h2 .n { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--ink); color: #fff; font-size: 13px; }
-  .stage .what { color: var(--soft); margin: 0 0 14px; font-size: 15px; }
-  .hl { font-size: 20px; line-height: 1.6; }
+  .node { position: absolute; background: var(--card); border: 1.5px solid var(--line); border-radius: 14px; padding: 12px;
+    display: grid; grid-template-columns: 40px 1fr; gap: 10px; align-items: start; cursor: pointer; opacity: .5;
+    transition: opacity .35s, border-color .35s, box-shadow .35s, transform .2s; box-shadow: 0 1px 2px rgba(17,18,20,.05); }
+  .node:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(17,18,20,.08); }
+  .node.running { opacity: 1; border-color: var(--blue); box-shadow: 0 0 0 5px rgba(40,89,181,.13); }
+  .node.done { opacity: 1; border-color: #8FC7A5; }
+  .node.sel { box-shadow: 0 0 0 3px var(--ink); }
+  .node .ic { width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; }
+  .node .ic svg { width: 22px; height: 22px; fill: none; stroke: #fff; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .node .t { font-weight: 700; font-size: 15px; line-height: 1.2; }
+  .node .s { font-size: 13px; line-height: 1.35; color: var(--soft); margin-top: 4px; opacity: 0; transition: opacity .4s;
+    display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+  .node.done .s { opacity: 1; }
+  .node .s b { color: var(--ink); font-weight: 600; }
+  .node .badge { position: absolute; top: -9px; right: -9px; width: 22px; height: 22px; border-radius: 50%; display: none; }
+  .node.running .badge { display: block; border: 3px solid var(--blue-bg); border-top-color: var(--blue); animation: spin .7s linear infinite; background: #fff; }
+  .node.done .badge { display: grid; place-items: center; background: var(--green); }
+  .node.done .badge::after { content: ""; width: 9px; height: 5px; border-left: 2.5px solid #fff; border-bottom: 2.5px solid #fff; transform: translateY(-1px) rotate(-45deg); }
+  .node .port { position: absolute; top: 50%; width: 11px; height: 11px; margin-top: -5.5px; border-radius: 50%; background: #fff; border: 2px solid #B9BBB3; }
+  .node .port.in { left: -6.5px; } .node .port.out { right: -6.5px; }
+  .node.done .port { border-color: #8FC7A5; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .hint { margin: 10px 24px 40px; color: var(--soft); font-size: 14px; }
+
+  /* the node panel, like opening a node in n8n */
+  .scrim { position: fixed; inset: 0; background: rgba(17,18,20,.25); opacity: 0; pointer-events: none; transition: opacity .25s; z-index: 20; }
+  .scrim.open { opacity: 1; pointer-events: auto; }
+  .panel { position: fixed; top: 0; right: 0; bottom: 0; width: min(680px, 100vw); background: var(--card); z-index: 21; overflow: auto;
+    transform: translateX(102%); transition: transform .32s cubic-bezier(.2,.8,.2,1); box-shadow: -12px 0 40px rgba(17,18,20,.12); }
+  .panel.open { transform: none; }
+  .panel .ph { position: sticky; top: 0; background: var(--card); border-bottom: 1px solid var(--line); padding: 16px 22px; display: flex; gap: 12px; align-items: center; z-index: 2; }
+  .panel .ph .ic { width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center; flex: none; }
+  .panel .ph .ic svg { width: 21px; height: 21px; fill: none; stroke: #fff; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .panel .ph h2 { margin: 0; font-size: 19px; }
+  .panel .ph .io { font-size: 13px; color: var(--soft); }
+  .panel .ph .btns { margin-left: auto; display: flex; gap: 6px; flex: none; }
+  .panel .ph button { font: 600 15px var(--font); width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line); background: var(--card); cursor: pointer; }
+  .panel .ph button:disabled { opacity: .35; cursor: default; }
+  .panel .pb { padding: 18px 22px 40px; }
+  .what { color: var(--soft); margin: 0 0 14px; font-size: 15px; }
+  .hl { font-size: 19px; line-height: 1.6; }
   mark { padding: 1px 3px; border-radius: 4px; }
   mark.subj { background: var(--blue-bg); color: var(--blue); font-weight: 600; }
   mark.val { background: #F1F8C8; color: #4A5A00; font-weight: 600; }
-  table { width: 100%; border-collapse: collapse; font-size: 15px; }
-  th { text-align: left; font-size: 12px; color: var(--soft); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; padding: 6px 8px;
-    border-bottom: 1px solid var(--line); }
-  td { padding: 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th { text-align: left; font-size: 12px; color: var(--soft); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  td { padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
   tr.self td { background: var(--blue-bg); }
-  .bar { height: 10px; border-radius: 5px; background: var(--line); position: relative; min-width: 120px; }
+  .bar { height: 10px; border-radius: 5px; background: var(--line); position: relative; min-width: 80px; }
   .bar i { position: absolute; inset: 0 auto 0 0; border-radius: 5px; background: var(--soft); }
   .bar.win i { background: var(--blue); }
   .chosen { color: var(--green); font-weight: 700; }
@@ -75,24 +115,22 @@
   .fact { margin-bottom: 18px; }
   .fact h3 { margin: 0 0 6px; font-size: 16px; }
   .chart svg { width: 100%; height: auto; display: block; border: 1px solid var(--line); border-radius: 10px; background: #FBFBF8; }
-  .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; color: var(--soft); margin-top: 6px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 13px; color: var(--soft); margin-top: 6px; }
   .legend span::before { content: "●"; margin-right: 5px; }
   .legend .t::before { color: var(--green); } .legend .f::before { color: var(--red); } .legend .u::before { color: #9AA0AB; }
   .legend .s::before { color: var(--blue); } .legend .st::before { content: "━"; color: #7FA600; }
-  .probs div { display: grid; grid-template-columns: 80px 1fr 60px; gap: 10px; align-items: center; margin: 6px 0; }
+  .probs div { display: grid; grid-template-columns: 76px 1fr 56px; gap: 10px; align-items: center; margin: 6px 0; }
   .probs .bar { height: 14px; }
-  .rule { font-size: 18px; margin: 14px 0 4px; }
-  .rule b { font-variant-numeric: tabular-nums; }
-  .evidence { display: grid; grid-template-columns: 1fr auto; gap: 4px 16px; font-size: 15px; }
+  .rule { font-size: 17px; margin: 14px 0 4px; }
+  .evidence { display: grid; grid-template-columns: 1fr auto; gap: 4px 16px; font-size: 14px; }
   .evidence span:nth-child(2n) { font-variant-numeric: tabular-nums; font-weight: 600; text-align: right; }
   details summary { cursor: pointer; color: var(--soft); margin-top: 12px; }
-  pre, code { font-family: var(--mono); }
-  pre.csv { background: #111214; color: #F5F5F1; padding: 14px 16px; border-radius: 10px; font-size: 15px; overflow: auto; margin: 0; }
-  .controls { display: flex; gap: 10px; margin: 0 0 16px; }
-  .controls button { font: 600 14px var(--font); padding: 8px 16px; border-radius: 999px; border: 1px solid var(--ink); background: var(--card); cursor: pointer; }
-  .empty { color: var(--soft); padding: 40px 0; }
-  @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } aside { position: static; height: auto; max-height: 40vh; }
-    .strip { grid-template-columns: repeat(4, 1fr); } main { padding: 20px; } }
+  code { font-family: var(--mono); }
+  pre.csv { background: #111214; color: #F5F5F1; padding: 14px 16px; border-radius: 10px; font: 14px var(--mono); overflow: auto; margin: 0; }
+  .empty { color: var(--soft); padding: 40px 24px; }
+  @media (max-width: 700px) {
+    header, .picker, .head { padding-left: 16px; padding-right: 16px; } .wrap { margin: 12px 16px 0; } .hint { margin: 10px 16px 40px; }
+    .verdict .actions { margin-left: 0; } header .note { display: none; } }
 </style>
 </head>
 <body>
@@ -101,23 +139,51 @@
   <span class="name">Inside the machine</span>
   <span class="note" id="hdrNote"></span>
 </header>
-<div class="layout">
-  <aside>
-    <h3>Sentences of the last live run</h3>
-    <div class="filters" id="filters"></div>
-    <div id="list"><div class="empty">Loading…</div></div>
-  </aside>
-  <main id="main"><div class="empty">Pick a sentence on the left. If the list is empty, run the live check first.</div></main>
+<div class="picker">
+  <div class="chips" id="filters"></div>
+  <select id="pick" aria-label="Sentence"></select>
+  <div class="nav"><button id="prev" title="Previous sentence">←</button><button id="next" title="Next sentence">→</button></div>
 </div>
+<div id="main"><div class="empty">Loading…</div></div>
+<div class="scrim" id="scrim"></div>
+<aside class="panel" id="panel" aria-hidden="true"></aside>
 
 <script>
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-const STAGES = [["Input", "the page"], ["Linker", "who"], ["Reader", "which values"], ["Attributor", "which fact"],
-  ["Truth engine", "the timeline"], ["Judge", "the verdict"], ["Writer", "output.csv"]];
+const SVG = "http://www.w3.org/2000/svg";
 const STATUS = { agrees: "holds on this date", stale: "was true before this date, but not on it", premature: "only becomes true after this date",
   invented: "is never true on this timeline", unknown: "has no other evidence to compare with", none: "no fact found" };
-let INDEX = [], FILTER = "all", CURRENT = null, timers = [];
+const SHORT = { agrees: "holds on this date", stale: "stale", premature: "premature", invented: "never true", unknown: "no other evidence", none: "no fact" };
+
+// the graph: the same data flow as polygraph/pipeline.py
+const W = 1724, H = 486, NW = 176, NH = 104, CY = 164;
+const ICONS = {
+  input: '<path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5"/>',
+  linker: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
+  reader: '<circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/>',
+  attributor: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/>',
+  kb: '<ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6"/><path d="M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3"/>',
+  truth: '<path d="M3 19h5v-5h5V9h5V5h3"/>',
+  judge: '<path d="M12 4v16M7 20h10M5 7h14"/><path d="M5 7l-3 6a3 3 0 0 0 6 0z"/><path d="M19 7l-3 6a3 3 0 0 0 6 0z"/>',
+  writer: '<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 10h16M10 10v10"/>',
+};
+const NODES = [
+  { id: "input", name: "Input", color: "#6B7280", x: 24, y: CY },
+  { id: "linker", name: "Linker", color: "#2859B5", x: 274, y: 30 },
+  { id: "reader", name: "Reader", color: "#7FA600", x: 274, y: 298 },
+  { id: "attributor", name: "Attributor", color: "#7C4DCC", x: 524, y: CY },
+  { id: "kb", name: "Knowledge base", color: "#0E8C8C", x: 774, y: CY },
+  { id: "truth", name: "Truth engine", color: "#D9822B", x: 1024, y: CY },
+  { id: "judge", name: "Judge", color: "#C8303F", x: 1274, y: CY },
+  { id: "writer", name: "Writer", color: "#1E8E4F", x: 1524, y: CY },
+];
+const EDGES = [["input", "linker"], ["input", "reader"], ["linker", "attributor"], ["reader", "attributor"], ["attributor", "kb"],
+  ["kb", "truth"], ["truth", "judge"], ["input", "judge", "page"], ["judge", "writer"]];
+const node = id => NODES.find(n => n.id === id);
+const RUN = 620, TRAVEL = 560;
+
+let INDEX = [], FILTER = "all", CURRENT = null, DATA = null, timers = [], OPEN = null;
 
 function val(v) {
   if (!v) return "";
@@ -132,42 +198,51 @@ function val(v) {
   return `${op}${v.value}`;
 }
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+const attr = a => a.replace(/_/g, " ");
+const plural = (n, w, ws) => `${n} ${n === 1 ? w : (ws || w + "s")}`;
 
-/* ---- the list ----------------------------------------------------------------------- */
+/* ---- picking a sentence ------------------------------------------------------------------ */
 async function loadIndex() {
   const j = await (await fetch("/api/trace/index")).json();
   INDEX = j.rows.filter(r => r.traced);
+  if (!INDEX.length) { $("#main").innerHTML = '<div class="empty">No traces yet. Run the live check first (← Live run).</div>'; return; }
   const hasSample = INDEX.some(r => r.sample);
   const filters = [...(hasSample ? [["sample", "Sample"]] : []), ["false", "Called false"], ["wrong", "Wrong"], ["all", "All"]];
-  FILTER = hasSample ? "sample" : "false";
+  const want = new URLSearchParams(location.search).get("row");
+  const wanted = INDEX.find(r => r.id === want);
+  FILTER = wanted ? (hasSample && wanted.sample ? "sample" : "all") : hasSample ? "sample" : "false";
   $("#filters").innerHTML = filters.map(([k, n]) => `<button data-f="${k}" class="${k === FILTER ? "on" : ""}">${n}</button>`).join("");
   $("#filters").querySelectorAll("button").forEach(b => b.onclick = () => {
-    FILTER = b.dataset.f; $("#filters").querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b)); drawList(); });
+    FILTER = b.dataset.f; $("#filters").querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b));
+    fillPick(); const first = listRows()[0]; if (first) open(first.id); });
   if (j.trace) $("#hdrNote").textContent = `${j.trace.traced} sentences traced · ${j.trace.same_label} with the same label as the Docker run`;
-  drawList();
-  const want = new URLSearchParams(location.search).get("row");
-  const first = INDEX.find(r => r.id === want) || listRows()[0];
-  if (first) open(first.id); else if (!INDEX.length) $("#list").innerHTML = '<div class="empty">No traces yet. Run the live check (← Live run).</div>';
+  $("#pick").onchange = () => open($("#pick").value);
+  $("#prev").onclick = () => step(-1); $("#next").onclick = () => step(1);
+  fillPick();
+  const first = wanted || listRows()[0];
+  if (first) open(first.id);
 }
 function listRows() {
   return INDEX.filter(r => FILTER === "all" || (FILTER === "sample" && r.sample) || (FILTER === "false" && r.label === "false")
     || (FILTER === "wrong" && r.truth && r.truth !== r.label));
 }
-function drawList() {
-  $("#list").innerHTML = listRows().map(r => `<button class="item ${r.id === CURRENT ? "on" : ""}" data-id="${esc(r.id)}">
-    <span class="pill ${r.label}">${r.label}</span> ${esc(r.text.length > 90 ? r.text.slice(0, 88) + "…" : r.text)}
-    <small>${esc(r.id)} · ${esc(r.date)}${r.truth ? ` · hidden label: ${r.truth}` : ""}</small></button>`).join("") || '<div class="empty">None.</div>';
-  $("#list").querySelectorAll(".item").forEach(b => b.onclick = () => open(b.dataset.id));
+function fillPick() {
+  $("#pick").innerHTML = listRows().map(r => `<option value="${esc(r.id)}">${esc(r.label.toUpperCase())} · ${esc(r.id)} · ${esc(r.text.length > 90 ? r.text.slice(0, 88) + "…" : r.text)}</option>`).join("");
+  if (CURRENT) $("#pick").value = CURRENT;
 }
-
-/* ---- one row ------------------------------------------------------------------------- */
+function step(d) {
+  const rows = listRows(), i = rows.findIndex(r => r.id === CURRENT);
+  const r = rows[(i + d + rows.length) % rows.length]; if (r) open(r.id);
+}
 async function open(id) {
-  CURRENT = id; drawList();
+  CURRENT = id; $("#pick").value = id;
   history.replaceState(null, "", `?row=${encodeURIComponent(id)}`);
   const j = await (await fetch(`/api/trace/row/${encodeURIComponent(id)}`)).json();
-  render(j.trace, j.docker, j.feature_names);
+  DATA = build(j.trace, j.docker, j.feature_names);
+  draw();
 }
 
+/* ---- what each node computed ------------------------------------------------------------------ */
 function highlight(text, spans, cls) {
   const ok = spans.filter(s => s.start >= 0).sort((a, b) => a.start - b.start);
   let out = "", at = 0;
@@ -209,67 +284,84 @@ function timeline(f, day) {
   return s + "</svg>";
 }
 
-function render(t, docker, names) {
-  timers.forEach(clearTimeout); timers = [];
+function build(t, docker, names) {
   const row = t.row, v = t.verdict, judge = t.judge || {}, att = t.attributor;
   const features = t.features || [], pagef = t.page_features || [];
-  const linkerIn = (t.linker || []).filter(m => m.in_sentence), linkerPage = (t.linker || []).filter(m => !m.in_sentence);
+  const linker = t.linker || [], linkerIn = linker.filter(m => m.in_sentence), linkerPage = linker.filter(m => !m.in_sentence);
+  const rd = t.reader || [], facts = (t.truth && t.truth.facts) || [], rec = t.reconcile || [];
   const match = docker && docker.label === v.label;
   const evid = n => { const f = features.find(x => x.name === n); return f ? f.value : null; };
   const unlog = x => x == null ? "–" : Math.round(Math.exp(x) - 1);
-  const pf = judge.p_false_given_decided;
+  const pf = judge.p_false_given_decided, worst = t.truth ? t.truth.worst : "none";
+  const pageSize = (t.truth && t.truth.page && t.truth.page.size) || (t.page || []).length;
+  const real = att ? att.values.filter(a => a.kind !== "boolean" || a.candidates.some(c => c.probability >= 0.01)) : [];
+  const quietYesNo = att ? att.values.find(a => a.kind === "boolean" && !real.includes(a)) : null;
+  const chosen = att ? att.chosen : [];
+  const cls = judge.classes || [], probs = judge.probabilities || [];
+  const conf = v.confidence ? ` ${Math.round(v.confidence * 100)}%` : "";
+  const D = { row, v, docker, match, summary: {}, panel: {}, what: {}, edge: {} };
 
-  const stages = [];
-  // 1 input
-  stages.push(`<p class="what">The sentence and the page it was published on. Sentences on one page are judged together: lies cluster.</p>
-    <table><thead><tr><th>On the same page</th><th>Label in the input</th></tr></thead><tbody>
+  // Input
+  D.summary.input = `<b>${esc(row.id)}</b>, ${esc(row.date)}<br>page of ${plural(pageSize, "sentence")}`;
+  D.what.input = "The sentence and the page it was published on. Sentences on one page are judged together: lies cluster.";
+  D.panel.input = `<table><thead><tr><th>On the same page</th><th>Label in the input</th></tr></thead><tbody>
     ${(t.page || []).map(p => `<tr class="${p.self ? "self" : ""}"><td>${esc(p.text)}</td><td>${p.self ? "<b>this sentence</b>" : p.label ? `<span class="pill ${p.label}">${p.label}</span>` : '<span class="sub">to be labelled</span>'}</td></tr>`).join("")}
-    </tbody></table>`);
-  // 2 linker
-  stages.push(`<p class="what">Finds who the sentence is about, from Hooly's own list of names (the lexicon). Subjects named elsewhere on the page are candidates too.</p>
-    <div class="hl">${highlight(row.text, linkerIn, "subj")}</div>
+    </tbody></table>`;
+  // Linker
+  D.summary.linker = linkerIn.length ? `<b>${linkerIn.map(m => esc(m.subject)).join(", ")}</b>` + (linkerPage.length ? ` + ${linkerPage.length} on the page` : "")
+    : linkerPage.length ? `None in the sentence; <b>${plural(linkerPage.length, "subject")}</b> on the page` : "No subject found";
+  D.what.linker = "Finds who the sentence is about, from Hooly's own list of names (the lexicon). Subjects named elsewhere on the page are candidates too.";
+  D.panel.linker = `<div class="hl">${highlight(row.text, linkerIn, "subj")}</div>
     <div class="box">${linkerIn.length ? `Named in the sentence: ${linkerIn.map(m => `<b>${esc(m.subject)}</b>`).join(", ")}` : "No subject named in the sentence itself."}
-    ${linkerPage.length ? `<br><span class="sub">Named elsewhere on the page: ${linkerPage.map(m => `${esc(m.subject)} (${m.row_gap} sentence${m.row_gap === 1 ? "" : "s"} away)`).join(", ")}</span>` : ""}</div>`);
-  // 3 reader
-  const rd = t.reader || [];
-  stages.push(`<p class="what">Reads every value exactly as the organisers' published rules do: money, counts, dates, versions, durations, percentages.</p>
-    <div class="hl">${highlight(row.text, rd, "val")}</div>
+    ${linkerPage.length ? `<br><span class="sub">Named elsewhere on the page: ${linkerPage.map(m => `${esc(m.subject)} (${plural(m.row_gap, "sentence")} away)`).join(", ")}</span>` : ""}</div>`;
+  // Reader
+  D.summary.reader = rd.length ? rd.map(r => `<b>${esc(val(r.value))}</b>${r.negated ? " (negated)" : ""}`).join(", ") : "No number, date or price";
+  D.what.reader = "Reads every value exactly as the organisers' published rules do: money, counts, dates, versions, durations, percentages.";
+  D.panel.reader = `<div class="hl">${highlight(row.text, rd, "val")}</div>
     ${rd.length ? `<table style="margin-top:12px"><thead><tr><th>Written</th><th>Read as</th><th>Kind</th></tr></thead><tbody>
       ${rd.map(r => `<tr><td>“${esc(r.text)}”</td><td><b>${esc(val(r.value))}</b>${r.negated ? ' <span class="pill false">negated: ignored</span>' : ""}
         ${r.alts && r.alts.length ? `<br><span class="sub">also possible: ${r.alts.map(a => esc(val(a))).join(", ")}</span>` : ""}</td><td>${esc(r.value.kind)}</td></tr>`).join("")}
-      </tbody></table>` : '<div class="box">No number, date or price in this sentence. Yes/no facts and names are found by the next stage.</div>'}`);
-  // 4 attributor
-  const real = att ? att.values.filter(a => a.kind !== "boolean" || a.candidates.some(c => c.probability >= 0.01)) : [];
-  const quietYesNo = att ? att.values.find(a => a.kind === "boolean" && !real.includes(a)) : null;
-  stages.push(`<p class="what">A model trained on 2,400 labelled facts gives every (subject, attribute) a value could belong to a probability.
-    The score that decides is that probability tempered by close rivals (four equal rivals halve it). The best score is kept if it is above ${att ? att.threshold : "the threshold"}; on an exact tie the first one listed wins, and the next stage can still correct it.</p>
-    ${att ? real.map(a => `<div class="box"><b>“${esc(a.text)}”</b> <span class="sub">· ${a.considered} candidate facts scored</span>
-      <table style="margin-top:8px"><thead><tr><th>Candidate fact</th><th>Probability</th><th></th><th style="text-align:right">Score</th></tr></thead><tbody>${a.candidates.map((c, i) => {
-        const won = att.chosen.some(ch => ch.subject === c.subject && ch.attribute === c.attribute && same(ch.value, c.value));
-        return `<tr><td style="width:46%">${won ? '<span class="chosen">✓ </span>' : ""}${esc(c.subject)} · ${esc(c.attribute.replace(/_/g, " "))}
+      </tbody></table>` : '<div class="box">No number, date or price in this sentence. Yes/no facts and names are found by the next node.</div>'}`;
+  // Attributor
+  D.summary.attributor = !att ? "Facts from the practice data" : chosen.length
+    ? chosen.map(c => `<b>${esc(c.subject)} · ${esc(attr(c.attribute))}</b>`).join("; ") + ` (score ${chosen[0].score.toFixed(2)})`
+    : `Nothing scored above ${att.threshold}`;
+  D.what.attributor = `A model trained on 2,400 labelled facts gives every (subject, attribute) a value could belong to a probability.
+    The score that decides is that probability tempered by close rivals (four equal rivals halve it). The best score is kept if it is above ${att ? att.threshold : "the threshold"}; on an exact tie the first one listed wins, and the knowledge base can still correct it.`;
+  D.panel.attributor = att ? real.map(a => `<div class="box"><b>“${esc(a.text)}”</b> <span class="sub">· ${a.considered} candidate facts scored</span>
+      <table style="margin-top:8px"><thead><tr><th>Candidate fact</th><th>Probability</th><th></th><th style="text-align:right">Score</th></tr></thead><tbody>${a.candidates.map(c => {
+        const won = chosen.some(ch => ch.subject === c.subject && ch.attribute === c.attribute && same(ch.value, c.value));
+        return `<tr><td style="width:46%">${won ? '<span class="chosen">✓ </span>' : ""}${esc(c.subject)} · ${esc(attr(c.attribute))}
           ${c.value.kind === "boolean" ? ` = ${val(c.value)}` : ""}</td>
           <td><div class="bar ${won ? "win" : ""}"><i style="width:${Math.max(1, c.probability * 100)}%"></i></div></td>
-          <td style="width:70px;text-align:right">${(c.probability * 100).toFixed(1)}%</td>
-          <td style="width:70px;text-align:right">${c.score.toFixed(3)}</td></tr>`; }).join("")}</tbody></table></div>`).join("")
+          <td style="width:64px;text-align:right">${(c.probability * 100).toFixed(1)}%</td>
+          <td style="width:60px;text-align:right">${c.score.toFixed(3)}</td></tr>`; }).join("")}</tbody></table></div>`).join("")
       + (quietYesNo ? `<div class="box sub">Read as a yes/no statement: ${quietYesNo.considered} yes/no facts checked, none above 1%.</div>` : "")
-      : '<div class="box">This sentence is labelled in the input, so its facts come straight from the practice data.</div>'}
-    ${(t.reconcile || []).length ? `<div class="box warn"><b>Corrected by the knowledge base.</b> ${t.reconcile.map(n => n.was
-      ? `${esc(n.was.subject)} · ${esc(n.was.attribute.replace(/_/g, " "))} → <b>${esc(n.now.subject)} · ${esc(n.now.attribute.replace(/_/g, " "))}</b>`
-      : `added <b>${esc(n.now.subject)} · ${esc(n.now.attribute.replace(/_/g, " "))} = ${esc(val(n.now.value))}</b>`).join("; ")}:
-      the value matches exactly what that fact holds on this date.</div>` : ""}
-    <div class="box"><b>Facts used:</b> ${(t.truth && t.truth.facts.length) ? t.truth.facts.map(f => `${esc(f.subject)} · ${esc(f.attribute.replace(/_/g, " "))} = <b>${esc(val(f.value))}</b>`).join("; ") : "none"}</div>`);
-  // 5 truth engine
-  const facts = (t.truth && t.truth.facts) || [];
-  stages.push(`<p class="what">Every other sentence that mentions the same fact lands on its timeline. The engine fits the most likely staircase: a lone wrong value is outvoted, and a real change repeated by later pages becomes a new step. Pages earn trust as it goes.</p>
-    ${facts.length ? facts.map(f => `<div class="fact"><h3>${esc(f.subject)} · ${esc(f.attribute.replace(/_/g, " "))}</h3>
+      : '<div class="box">This sentence is labelled in the input, so its facts come straight from the practice data.</div>';
+  // Knowledge base
+  D.summary.kb = rec.length ? `<b>${plural(rec.length, "correction")}</b> · ${plural(facts.length, "fact")} kept` : `No correction · ${plural(facts.length, "fact")} kept`;
+  D.what.kb = "Checks the attributor against what is already known. A value that matches exactly what one fact of a subject on the page holds on this date is almost surely that fact, so the knowledge base takes the match. Lies never match, so this only rescues true sentences from an extraction slip.";
+  D.panel.kb = (rec.length ? `<div class="box warn"><b>Corrected.</b> ${rec.map(n => n.was
+      ? `${esc(n.was.subject)} · ${esc(attr(n.was.attribute))} → <b>${esc(n.now.subject)} · ${esc(attr(n.now.attribute))}</b>`
+      : `added <b>${esc(n.now.subject)} · ${esc(attr(n.now.attribute))} = ${esc(val(n.now.value))}</b>`).join("; ")}:
+      the value matches exactly what that fact holds on this date.</div>` : '<div class="box">No exact match that disagrees with the attributor, so its choice stands.</div>')
+    + `<div class="box"><b>Facts sent on:</b> ${facts.length ? facts.map(f => `${esc(f.subject)} · ${esc(attr(f.attribute))} = <b>${esc(val(f.value))}</b>`).join("; ") : "none"}</div>`;
+  // Truth engine
+  const bad = facts.find(f => f.status === worst) || facts[0];
+  D.summary.truth = bad ? `<b>${esc(val(bad.value))}</b> ${esc(SHORT[bad.status] || bad.status)}` + (bad.held_on_date && !same(bad.held_on_date, bad.value) ? ` · timeline: <b>${esc(val(bad.held_on_date))}</b>` : "")
+    : "No fact to place on a timeline";
+  D.what.truth = "Every other sentence that mentions the same fact lands on its timeline. The engine fits the most likely staircase: a lone wrong value is outvoted, and a real change repeated by later pages becomes a new step. Pages earn trust as it goes.";
+  D.panel.truth = facts.length ? facts.map(f => `<div class="fact"><h3>${esc(f.subject)} · ${esc(attr(f.attribute))}</h3>
       <div class="chart">${timeline(f, row.date)}</div>
       <div class="legend"><span class="st">fitted timeline</span><span class="t">labelled true</span><span class="f">labelled false</span><span class="u">other sentences (size = trust)</span><span class="s">this sentence</span></div>
       <div class="box">This sentence says <b>${esc(val(f.value))}</b> on ${esc(row.date)}${f.held_on_date ? `; the timeline holds <b>${esc(val(f.held_on_date))}</b> on that date` : ""}.
-        The value <b>${STATUS[f.status] || f.status}</b>. <span class="sub">${f.mention_count} mentions of this fact · this page's trust ${f.page_trust}</span></div></div>`).join("")
-      : '<div class="box">No fact to place on a timeline: the judge decides from the page and the wording alone.</div>'}`);
-  // 6 judge
+        The value <b>${STATUS[f.status] || f.status}</b>. <span class="sub">${plural(f.mention_count, "mention")} of this fact · this page's trust ${f.page_trust}</span></div></div>`).join("")
+    : '<div class="box">No fact to place on a timeline: the judge decides from the page and the wording alone.</div>';
+  // Judge
+  D.summary.judge = v.label === "unsure" ? `Most likely <b>unsure</b>` : `P(false) <b>${Math.round(pf * 100)}%</b> ${pf > judge.cutoff ? ">" : "≤"} ${judge.cutoff * 100}% → <b>${v.label}</b>`;
+  D.what.judge = `A forest of decision trees, trained on the labelled rows, reads ${names.length} numbers about this sentence. These matter most:`;
   const lines = [
-    ["Worst fact's status", STATUS[t.truth ? t.truth.worst : "none"] || "–"],
+    ["Worst fact's status", STATUS[worst] || "–"],
     ["Other mentions of that fact", unlog(evid("other mentions of the worst fact (log)"))],
     ["…with the same value within 30 days", unlog(evid("mentions with the same value within 30 days (log)"))],
     ["…with a different value within 30 days", unlog(evid("mentions with a different value within 30 days (log)"))],
@@ -282,9 +374,7 @@ function render(t, docker, names) {
     ["Other sentences on this page the first pass called false", !pagef.length ? "–" : pagef[1] < 0 ? "no other sentences"
       : `${pagef[2]} (highest P(false) ${Math.round(pagef[1] * 100)}%)`],
   ];
-  const cls = judge.classes || [], probs = judge.probabilities || [];
-  stages.push(`<p class="what">A forest of decision trees, trained on the labelled rows, reads ${names.length} numbers about this sentence. Here are the ones that matter most:</p>
-    <div class="evidence">${lines.map(([a, b]) => `<span>${esc(a)}</span><span>${esc(b ?? "–")}</span>`).join("")}</div>
+  D.panel.judge = `<div class="evidence">${lines.map(([a, b]) => `<span>${esc(a)}</span><span>${esc(b ?? "–")}</span>`).join("")}</div>
     <h3 style="margin:18px 0 6px;font-size:16px">What the trees say</h3>
     <div class="probs">${["true", "false", "unsure"].map(c => { const i = cls.indexOf(c), p = i >= 0 ? probs[i] : 0;
       return `<div><span class="pill ${c}">${c}</span><div class="bar"><i style="width:${p * 100}%;background:var(--${c === "true" ? "green" : c === "false" ? "red" : "amber"})"></i></div><span>${(p * 100).toFixed(1)}%</span></div>`; }).join("")}</div>
@@ -293,41 +383,158 @@ function render(t, docker, names) {
     <div class="sub">${esc(v.why)}${judge.self_training ? ` · Self-training: in the first pass this sentence scored P(false) ${(judge.first_pass_p_false * 100).toFixed(0)}%; other sentences' confident verdicts were then added to the timelines as weak evidence, and everything was judged again.` : ""}</div>
     <details><summary>All ${names.length} numbers the trees read</summary><table style="margin-top:8px"><tbody>
       ${[...features, ...pagef.map((x, i) => ({ name: names[features.length + i], value: x }))].map(f => `<tr><td>${esc(f.name)}</td><td style="text-align:right">${esc(f.value)}</td></tr>`).join("")}
-    </tbody></table></details>`);
-  // 7 writer
-  stages.push(`<p class="what">The row this sentence gets in <code>output.csv</code>: id, four empty claim columns, the label and the confidence.</p>
-    <pre class="csv">id,type,text,form,label,confidence\n${esc(v.csv)}</pre>
+    </tbody></table></details>`;
+  // Writer
+  D.summary.writer = `<b>${v.label}${v.confidence != null ? ", " + v.csv.split(",").pop() : ""}</b> to output.csv` + (docker ? `<br>Docker wrote <b>${docker.label}</b> ${match ? "✓" : "✗"}` : "");
+  D.what.writer = "The row this sentence gets in output.csv: id, four empty claim columns, the label and the confidence.";
+  D.panel.writer = `<pre class="csv">id,type,text,form,label,confidence\n${esc(v.csv)}</pre>
     ${docker ? `<div class="box">The Docker container wrote: <span class="pill ${docker.label}">${docker.label}</span>${docker.confidence ? ` ${Math.round(docker.confidence * 100)}%` : ""}
       ${match ? ' <span class="chosen">✓ same as this trace</span>' : ' <span style="color:var(--red);font-weight:700">differs from this trace</span>'}
-      ${docker.truth ? ` · hidden practice label: <span class="pill ${docker.truth}">${docker.truth}</span> ${docker.truth === docker.label ? '<span class="chosen">✓ correct</span>' : '<span style="color:var(--red);font-weight:700">✗ wrong</span>'}` : ""}</div>` : ""}`);
+      ${docker.truth ? ` · hidden practice label: <span class="pill ${docker.truth}">${docker.truth}</span> ${docker.truth === docker.label ? '<span class="chosen">✓ correct</span>' : '<span style="color:var(--red);font-weight:700">✗ wrong</span>'}` : ""}</div>` : ""}`;
 
+  // what travels along each edge
+  D.edge = {
+    "input>linker": "1 sentence", "input>reader": "1 sentence",
+    "linker>attributor": plural(linker.length, "subject"), "reader>attributor": plural(rd.length, "value"),
+    "attributor>kb": plural(att ? chosen.length : facts.length, "fact"), "kb>truth": plural(facts.length, "fact"),
+    "truth>judge": `${features.length} numbers`, "input>judge": `the page: ${pagef.length || 3} numbers`,
+    "judge>writer": `${v.label}${conf}`,
+  };
+  return D;
+}
+
+/* ---- the canvas ------------------------------------------------------------------------------- */
+function edgePath(a, b, kind) {
+  const x1 = a.x + NW, y1 = a.y + NH / 2, x2 = b.x, y2 = b.y + NH / 2;
+  if (kind === "page") {  // runs under the graph, from the page straight to the judge
+    const yb = H - 24;
+    return `M${x1},${y1} C${x1 + 44},${y1} ${x1 + 30},${yb} ${x1 + 92},${yb} L${x2 - 92},${yb} C${x2 - 30},${yb} ${x2 - 44},${y2} ${x2},${y2}`;
+  }
+  const dx = Math.max(40, (x2 - x1) / 2);
+  return `M${x1},${y1} C${x1 + dx},${y1} ${x2 - dx},${y2} ${x2},${y2}`;
+}
+
+function draw() {
+  const D = DATA, v = D.v;
+  closePanel();
   $("#main").innerHTML = `
-    <div class="sub">${esc(row.id)} · page dated ${esc(row.date)}</div>
-    <div class="sentence">${esc(row.text)}</div>
-    <div class="match">Verdict: <span class="pill ${v.label}">${v.label}</span>${v.confidence ? ` ${Math.round(v.confidence * 100)}% sure` : ""}
-      ${docker ? ` · Docker run: <span class="pill ${docker.label}">${docker.label}</span> ${match ? '<span class="ok">✓ same</span>' : '<span class="no">differs</span>'}` : ""}
-      ${docker && docker.truth ? ` · hidden label: <span class="pill ${docker.truth}">${docker.truth}</span>` : ""}</div>
-    <div class="controls"><button id="replay">▶ Replay the run</button><button id="showAll">Show all stages</button></div>
-    <div class="strip">${STAGES.map(([a, b], i) => `<div data-i="${i}">${a}<b>${b}</b></div>`).join("")}</div>
-    ${stages.map((html, i) => `<section class="stage" id="st${i}"><h2><span class="n">${i + 1}</span>${STAGES[i][0]}</h2>${html}</section>`).join("")}`;
-  document.querySelectorAll(".strip div").forEach(d => d.onclick = () => $(`#st${d.dataset.i}`).scrollIntoView({ behavior: "smooth", block: "start" }));
-  $("#replay").onclick = () => play();
-  $("#showAll").onclick = () => { timers.forEach(clearTimeout); document.querySelectorAll(".stage").forEach(s => s.classList.add("shown"));
-    document.querySelectorAll(".strip div").forEach(d => { d.classList.remove("on"); d.classList.add("done"); }); };
-  play();
+    <div class="head">
+      <div class="sub">${esc(D.row.id)} · page dated ${esc(D.row.date)}</div>
+      <div class="sentence">${esc(D.row.text)}</div>
+      <div class="verdict">Verdict: <span class="pill ${v.label}">${v.label}</span>${v.confidence ? ` ${Math.round(v.confidence * 100)}% sure` : ""}
+        ${D.docker ? `· Docker run: <span class="pill ${D.docker.label}">${D.docker.label}</span> ${D.match ? '<span class="ok">✓ same</span>' : '<span class="no">differs</span>'}` : ""}
+        ${D.docker && D.docker.truth ? `· hidden label: <span class="pill ${D.docker.truth}">${D.docker.truth}</span>` : ""}
+        <span class="actions"><button id="replay">▶ Run again</button><button id="skip">Skip to the end</button></span></div>
+    </div>
+    <div class="wrap" id="wrap"><div class="sizer" id="sizer"><div class="canvas" id="canvas" style="width:${W}px;height:${H}px">
+      <svg class="edges" id="edges" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}"></svg>
+      ${NODES.map(n => `<div class="node" id="n-${n.id}" style="left:${n.x}px;top:${n.y}px;width:${NW}px;height:${NH}px" tabindex="0" role="button" aria-label="${n.name}">
+        <div class="ic" style="background:${n.color}"><svg viewBox="0 0 24 24">${ICONS[n.id]}</svg></div>
+        <div style="min-width:0"><div class="t">${n.name}</div><div class="s">${D.summary[n.id]}</div></div>
+        <span class="badge"></span>${n.id !== "input" ? '<i class="port in"></i>' : ""}${n.id !== "writer" ? '<i class="port out"></i>' : ""}</div>`).join("")}
+    </div></div></div>
+    <div class="hint">Every box is a stage of the real pipeline, with what it computed for this sentence. Click one to open it.</div>`;
+  const svg = $("#edges");
+  for (const [a, b, kind] of EDGES) {
+    const g = document.createElementNS(SVG, "g"), d = edgePath(node(a), node(b), kind);
+    g.setAttribute("class", "edge"); g.id = `e-${a}-${b}`;
+    g.innerHTML = `<path class="base" d="${d}"/><path class="flow" d="${d}"/>`;
+    svg.appendChild(g);
+    const p = g.querySelector("path"), len = p.getTotalLength(), mid = p.getPointAtLength(len / 2);
+    const text = D.edge[`${a}>${b}`], w = text.length * 6.6 + 16;
+    const lab = document.createElementNS(SVG, "g");
+    lab.setAttribute("class", "lab");
+    lab.innerHTML = `<rect x="${mid.x - w / 2}" y="${mid.y - 11}" width="${w}" height="22" rx="11"/><text x="${mid.x}" y="${mid.y + 4}" text-anchor="middle">${esc(text)}</text>`;
+    g.appendChild(lab);
+  }
+  NODES.forEach(n => { const el = $(`#n-${n.id}`); el.onclick = () => openPanel(n.id); el.onkeydown = e => { if (e.key === "Enter") openPanel(n.id); }; });
+  $("#replay").onclick = play; $("#skip").onclick = finish;
+  fit(); play();
+}
+
+function fit() {
+  const wrap = $("#wrap"); if (!wrap) return;
+  const s = Math.min(1, Math.max(0.55, (wrap.clientWidth - 2) / W));
+  $("#canvas").style.transform = `scale(${s})`;
+  $("#sizer").style.width = `${W * s}px`; $("#sizer").style.height = `${H * s}px`;
+}
+addEventListener("resize", fit);
+
+function schedule() {
+  // a node starts when everything it waits for has arrived, like the pipeline itself
+  const start = {}, end = {};
+  for (const n of NODES) {
+    const ins = EDGES.filter(e => e[1] === n.id);
+    start[n.id] = ins.length ? Math.max(...ins.map(e => end[e[0]] + TRAVEL)) : 0;
+    end[n.id] = start[n.id] + RUN;
+  }
+  return { start, end };
 }
 
 function play() {
-  // the stages light up in order, as the row flows through the pipeline
   timers.forEach(clearTimeout); timers = [];
-  const st = [...document.querySelectorAll(".stage")], strip = [...document.querySelectorAll(".strip div")];
-  st.forEach(s => s.classList.remove("shown")); strip.forEach(d => d.classList.remove("on", "done"));
-  st.forEach((s, i) => timers.push(setTimeout(() => {
-    s.classList.add("shown");
-    strip.forEach((d, j) => { d.classList.toggle("on", j === i); d.classList.toggle("done", j < i); });
-    if (i === st.length - 1) timers.push(setTimeout(() => strip.forEach(d => { d.classList.remove("on"); d.classList.add("done"); }), 900));
-  }, 250 + i * 750)));
+  document.querySelectorAll(".node").forEach(el => el.classList.remove("running", "done"));
+  document.querySelectorAll(".edge").forEach(el => { el.classList.remove("flowing", "done"); el.querySelectorAll(".packet").forEach(c => c.remove()); });
+  const { start, end } = schedule(), at = (ms, f) => timers.push(setTimeout(f, 300 + ms));
+  for (const n of NODES) {
+    const el = $(`#n-${n.id}`);
+    at(start[n.id], () => el.classList.add("running"));
+    at(end[n.id], () => { el.classList.remove("running"); el.classList.add("done"); });
+  }
+  for (const [a, b] of EDGES) {
+    const g = $(`#e-${a}-${b}`);
+    at(end[a], () => send(g));
+    at(end[a] + TRAVEL, () => { g.classList.remove("flowing"); g.classList.add("done"); g.querySelectorAll(".packet").forEach(c => c.remove()); });
+  }
 }
+
+function send(g) {
+  // a packet of data travels the edge
+  g.classList.add("flowing");
+  const c = document.createElementNS(SVG, "circle");
+  c.setAttribute("r", "6"); c.setAttribute("class", "packet");
+  const m = document.createElementNS(SVG, "animateMotion");
+  m.setAttribute("dur", `${TRAVEL}ms`); m.setAttribute("fill", "freeze"); m.setAttribute("begin", "indefinite");
+  m.setAttribute("path", g.querySelector("path").getAttribute("d"));
+  m.setAttribute("calcMode", "spline"); m.setAttribute("keyTimes", "0;1"); m.setAttribute("keyPoints", "0;1"); m.setAttribute("keySplines", "0.45 0 0.25 1");
+  c.appendChild(m); g.insertBefore(c, g.querySelector(".lab"));
+  try { m.beginElement(); } catch (e) { c.remove(); }
+}
+
+function finish() {
+  timers.forEach(clearTimeout); timers = [];
+  document.querySelectorAll(".node").forEach(el => { el.classList.remove("running"); el.classList.add("done"); });
+  document.querySelectorAll(".edge").forEach(el => { el.classList.remove("flowing"); el.classList.add("done"); el.querySelectorAll(".packet").forEach(c => c.remove()); });
+}
+
+/* ---- the node panel ------------------------------------------------------------------------------ */
+function openPanel(id) {
+  const n = node(id), D = DATA, i = NODES.indexOf(n);
+  const ins = EDGES.filter(e => e[1] === id).map(e => `${D.edge[`${e[0]}>${e[1]}`]} from ${node(e[0]).name}`);
+  const outs = EDGES.filter(e => e[0] === id).map(e => `${D.edge[`${e[0]}>${e[1]}`]} to ${node(e[1]).name}`);
+  OPEN = id;
+  document.querySelectorAll(".node").forEach(el => el.classList.toggle("sel", el.id === `n-${id}`));
+  $("#panel").innerHTML = `<div class="ph"><div class="ic" style="background:${n.color}"><svg viewBox="0 0 24 24">${ICONS[id]}</svg></div>
+      <div><h2>${n.name}</h2><div class="io">${ins.length ? "In: " + esc(ins.join(" · ")) : "The start of the run"}<br>${outs.length ? "Out: " + esc(outs.join(" · ")) : "Written to output.csv"}</div></div>
+      <div class="btns"><button id="pp" title="Previous stage" ${i ? "" : "disabled"}>‹</button><button id="pn" title="Next stage" ${i < NODES.length - 1 ? "" : "disabled"}>›</button><button id="px" title="Close">✕</button></div></div>
+    <div class="pb"><p class="what">${D.what[id]}</p>${D.panel[id]}</div>`;
+  $("#pp").onclick = () => openPanel(NODES[i - 1].id); $("#pn").onclick = () => openPanel(NODES[i + 1].id); $("#px").onclick = closePanel;
+  $("#panel").classList.add("open"); $("#panel").setAttribute("aria-hidden", "false"); $("#scrim").classList.add("open");
+  $("#panel").scrollTop = 0;
+}
+function closePanel() {
+  OPEN = null;
+  $("#panel").classList.remove("open"); $("#panel").setAttribute("aria-hidden", "true"); $("#scrim").classList.remove("open");
+  document.querySelectorAll(".node.sel").forEach(el => el.classList.remove("sel"));
+}
+$("#scrim").onclick = closePanel;
+addEventListener("keydown", e => {
+  if (!OPEN) return;
+  const i = NODES.findIndex(n => n.id === OPEN);
+  if (e.key === "Escape") closePanel();
+  if (e.key === "ArrowRight" && i < NODES.length - 1) openPanel(NODES[i + 1].id);
+  if (e.key === "ArrowLeft" && i > 0) openPanel(NODES[i - 1].id);
+});
 
 loadIndex();
 </script>
