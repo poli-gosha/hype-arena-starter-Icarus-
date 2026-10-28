@@ -1,5 +1,7 @@
 # The pitch video: "The Inspection" (a document-checkpoint story)
 
+**Built:** `video/inspection/` renders this film (see its README). The live insert is added at 09:00.
+
 A 3-minute pixel-art film about one tiny clerk inspecting statements about Hooly at a checkpoint
 desk. Every desk, tool and document is one stage of Polygraph, in the order the code runs. Every
 number on screen is real: what the system actually computed. The closing minute shows the real
@@ -115,7 +117,7 @@ From our live run on the 20 stand-in sample rows (`out/live/trace.json`, row `s-
 | Reader | **"€799"** → money · 799 · EUR |
 | Attributor | **52** candidate facts scored; **Hooly Pixel 10 · price 99.3%**; Hooly Pixel 10 Pro · price 0.06%; Hooly Pixel 9 · price 0.06% |
 | Knowledge base | No correction needed |
-| Truth engine | **11** documents about Hooly Pixel 10 · price; **8** certified true, **1** certified false. Timeline: **€799 from 28 Apr 2026**, **€749 from 2 Sep 2026** |
+| Truth engine | **10** other documents about Hooly Pixel 10 · price: **8** certified true, **1** certified false, 1 unlabelled. Timeline: **€799 from 28 Apr 2026**, **€749 from 2 Sep 2026** |
 | Status | **STALE**: €799 was true before 5 Oct, not on it |
 | Judge | P(false) **98.2%** > 60% cutoff → **FALSE**, **98%** sure |
 | Writer | `s-7,,,,false,0.982` |
@@ -170,12 +172,12 @@ Each step opens with a tab sliding in, e.g. **STEP 2 · WHO · linker**.
 
 | Time | Step | Shot | Captions and sound |
 |---|---|---|---|
-| 0:25–0:35 | 1 Input | The slip lands on the desk; the dossier clipped behind it fans out: the other sentences of its page. | "A statement never travels alone: it comes with its page. Pages that lie, lie together." [clip, papers] |
+| 0:25–0:35 | 1 Input | The slip lands on the desk, clipped to its page card (dated 5 Oct 2026; this statement is the page's only sentence). The date gets circled in red. | "Every statement arrives with its page and its date. Watch the date." [clip, papers] |
 | 0:35–0:47 | 2 Linker | The Registry thuds open; the clerk runs a finger down the names, then underlines **Hooly Pixel 10** in blue. Its registry card pops up: price · refresh rate · storage… | "WHO is it about? Checked against the Registry of Hooly: every name, every alias." [pages, pencil] |
 | 0:47–0:59 | 3 Reader | The Rulebook opens at MONEY; red pencil circles **€799**; margin note: "money · 799 · EUR". | "WHICH value? Read exactly as the organisers' Rulebook reads it." [pencil scratch] |
 | 0:59–1:11 | 4 Attributor | The filing cabinet: drawers light up with their odds. "PIXEL 10 · PRICE 99.3%" glows; "PIXEL 10 PRO · PRICE 0.06%" and "PIXEL 9 · PRICE 0.06%" stay dark. The drawer slides out; the slip goes in. | "WHICH fact? A model trained on 2,400 filed facts weighs 52 drawers." [drawer] |
 | 1:11–1:16 | 5 Knowledge base | Quick: the ledger, a tick in the margin. | "Already on file? Nothing to correct." [tick] |
-| 1:16–1:40 | 6 Truth engine | The clerk takes a lamp and walks into the archive (pan, footsteps). It pulls 11 documents and pins them on a corkboard timeline, Oct 2025 → Oct 2026. Eight get green seals, one a red one. The clerk draws the **lime line** through them: flat at €799 from 28 April, a step down to €749 on 2 September. A pin with the slip goes in at 5 October: the line there reads €749. Cut to the two slips side by side. | "WHEN was it true? Every document about this fact, on one timeline." → "€799 was true. In April." → the side-by-side, bold: "SAME SENTENCE. TRUE IN APRIL. FALSE IN OCTOBER." [footsteps, pins, the line drawn] |
+| 1:16–1:40 | 6 Truth engine | The clerk takes a lamp and walks into the archive (pan, footsteps). It pulls the 10 documents about this price and pins them on a corkboard timeline, Oct 2025 → Oct 2026. Eight get green seals, one a red one. The clerk draws the **lime line** through them: flat at €799 from 28 April, a step down to €749 on 2 September. A pin with the slip goes in at 5 October: the line there reads €749. Cut to the two slips side by side. | "WHEN was it true? Every document about this fact, on one timeline." → "€799 was true. In April." → the side-by-side, bold: "SAME SENTENCE. TRUE IN APRIL. FALSE IN OCTOBER." [footsteps, pins, the line drawn] |
 | 1:40–1:52 | 7 Judge | Back at the desk. A stack of 64 tiny evidence cards feeds the polygraph; the needle swings past the 60% line and settles at 98%. The stamp rises… and lands: red **FALSE · STALE**. The clerk nods once. | "64 clues. A forest of decision trees. 98% sure." [needle ticks, STAMP THUD] |
 | 1:52–1:55 | 8 Writer | The typewriter clacks the ledger line; the slip drops into the outbox marked output.csv. | Ledger: `s-7,,,,false,0.982` [keys, bell] |
 
@@ -184,8 +186,8 @@ Each step opens with a tab sliding in, e.g. **STEP 2 · WHO · linker**.
 |---|---|---|
 | 1:55–2:10 | Montage, faster, the music lifts: three applicants, three stamps. Gavin with his slip: **INVENTED** (the archive card says 12 languages). The launch host: **PREMATURE** (the archive shows €1,099 that day, €1,049 only later). The salesman's 10 TB slip: green **TRUE** seal. | "Three kinds of lies: never true · no longer true · not true yet." [three stamps, in rhythm] |
 | 2:10–2:22 | After hours: the window shutter closes, the lamp dims. The clerk takes a certificate pad and writes; each sheet is checked against the Rulebook, sealed "CERTIFIED TRUE", and stacked. The counter on the stack climbs to 1,000. Show two sheets: "Hooly Pixel 10 Pro costs €1,049." and "Hooly Pixel 10 cost €799 at Made by Hooly 2026." | "After hours: 1,000 new statements, written only from sealed records." [pen, seal, paper stack] |
-| 2:22–2:52 | The booth's little monitor flickers on; push in until it fills the frame: **the real screen recording** (Part 5). The live console builds and runs the Docker image on the 20 sample rows, then *Inside the machine* scrolls one sample sentence through the pipeline, the lime line tracing it. Keep the pixel frame of the monitor around it for the first and last second only. | "Live: the real system, in Docker, offline, on the 20 sample rows." If a wait is sped up, say so: "×6". |
-| 2:52–3:00 | The shift report, typed on paper. Then the title. | "SHIFT REPORT · 29 OCT 2026" with the numbers of Part 2, then "POLYGRAPH · TEAM ICARUS" and the last line: "Hype is easy to write. Hard to keep consistent. We check the timeline." [keys, final stamp] |
+| 2:22–2:50 | The booth's little monitor flickers on; push in until it fills the frame: **the real screen recording** (Part 5). The live console builds and runs the Docker image on the 20 sample rows, then *Inside the machine* scrolls one sample sentence through the pipeline, the lime line tracing it. Keep the pixel frame of the monitor around it for the first and last second only. | "Live: the real system, in Docker, offline, on the 20 sample rows." If a wait is sped up, say so: "×6". |
+| 2:50–3:00 | The shift report, typed on paper. Then the title. | "SHIFT REPORT · 29 OCT 2026" with the numbers of Part 2, then "POLYGRAPH · TEAM ICARUS" and the last line: "Hype is easy to write. Hard to keep consistent. We check the timeline." [keys, final stamp] |
 
 ---
 
@@ -214,7 +216,7 @@ Each step opens with a tab sliding in, e.g. **STEP 2 · WHO · linker**.
 > renders everything; `--from 1:16 --to 1:40` renders one stretch; `--preview` renders at
 > 480×270 for speed; `--still 1:30` writes one PNG to check a frame.
 >
-> **The live insert (2:22–2:52).** Read the screen recording from `video/inspection/live.mp4` if
+> **The live insert (2:22–2:50).** Read the screen recording from `video/inspection/live.mp4` if
 > it exists, scale it into the monitor frame and then full screen as Part 3 says; until it exists,
 > show a placeholder card "LIVE RECORDING · 09:00". Keep it real: never fake the console.
 >
@@ -234,6 +236,6 @@ Each step opens with a tab sliding in, e.g. **STEP 2 · WHO · linker**.
 | Tonight | Build and render the film with the live placeholder; check the stills. |
 | 09:00 | The sample lands in `sample/sample.csv` (pull it in from upstream). Start the server, open `/console.html`, tick the sample, **Build and run in Docker**. |
 | 09:10 | Record the screen (Windows: `Win+Alt+R`, or OBS) for about 2 minutes: the button, Docker Desktop showing the container, the results, then `/inside.html` scrolling two sample sentences through the pipeline. Save it as `video/inspection/live.mp4`. Pick a sample sentence whose case reads well. |
-| 09:30 | Cut the recording to 30 s (speed up the waiting, labelled "×6"), render the final film. |
+| 09:30 | Cut the recording to 28 s (speed up the waiting, labelled "×6"), render the final film. |
 | 10:15 | Watch it once, start to finish. Fix only what's wrong. |
 | 10:30 | Export, hand in the video; PR titled "Icarus" open with everything pushed. **No push after 11:00.** |
