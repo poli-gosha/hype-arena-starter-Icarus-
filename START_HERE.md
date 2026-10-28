@@ -10,15 +10,15 @@ The challenge is in [README.md](README.md) (the organizers'). This page is ours.
 | Backend teammate | `forge` | forge (the 1,000 claims), validate, server/app.py | [docs/BRIEF_backend.md](docs/BRIEF_backend.md) |
 | Frontend teammate | `frontend` | `web/` (the Polygraph console) | [docs/BRIEF_frontend.md](docs/BRIEF_frontend.md) |
 
-Only the captain merges into `main`. Git how-to: [docs/WORKFLOW.md](docs/WORKFLOW.md).
+Only the captain merges into `main`. Git how-to: [docs/WORKFLOW.md](docs/WORKFLOW.md). Tomorrow morning: [docs/SAMPLE_DAY.md](docs/SAMPLE_DAY.md).
 
 ## First time (10 minutes)
 
 You need Python 3.11+ and git.
 
 ```powershell
-git clone https://github.com/tudsac2308/hype-arena-starter.git
-cd hype-arena-starter
+git clone git@github.com:poli-gosha/hype-arena-starter-Icarus-.git
+cd hype-arena-starter-Icarus-
 powershell -ExecutionPolicy Bypass -File scripts\setup.ps1
 ```
 
@@ -28,7 +28,7 @@ On Mac/Linux, run `sh scripts/setup.sh` instead. Setup creates `.venv`, installs
 .venv\Scripts\Activate.ps1
 ```
 
-## The four commands you'll use all night
+## The commands you'll use
 
 | Command | What it does |
 | --- | --- |
@@ -36,6 +36,9 @@ On Mac/Linux, run `sh scripts/setup.sh` instead. Setup creates `.venv`, installs
 | `python scripts/eval.py --gold-extraction` | The same, but uses the organizers' extracted facts, so it measures the truth engine and forge alone |
 | `python -m pytest` | Tests: every example in `contracts/value-forms.md`, the linker, rendering and the end-to-end run |
 | `python scripts/run_local.py` | Runs exactly what the judges run (without Docker) and their format checker. Also writes `out/trace.json` for the frontend |
+| `python scripts/eval_labels.py` | Label accuracy over all 5 folds (cached extraction: seconds per run) |
+| `python scripts/eval_claims.py` | The 1,000 claims: valid (referee clone) and true (gold knowledge base) |
+| `sh scripts/check_windows.sh` | The official Docker check from Git Bash on Windows |
 
 With Docker installed, `sh scripts/check.sh` runs the official check (from Git Bash).
 

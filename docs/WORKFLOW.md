@@ -1,12 +1,12 @@
 # Git for the night (beginner-friendly)
 
-Our repo is `github.com/tudsac2308/hype-arena-starter` (a fork of QA-DNA's). Everyone works on their own branch, and the captain merges into `main`. The final pull request goes from our `main` to QA-DNA's repo.
+Our repo is `github.com/poli-gosha/hype-arena-starter-Icarus-` (a fork of QA-DNA's). Everyone works on their own branch, and the captain merges into `main`. The final pull request goes from our `main` to QA-DNA's repo.
 
 ## Once
 
 ```powershell
-git clone https://github.com/tudsac2308/hype-arena-starter.git
-cd hype-arena-starter
+git clone git@github.com:poli-gosha/hype-arena-starter-Icarus-.git
+cd hype-arena-starter-Icarus-
 git config user.name "Your Name"
 git config user.email "you@example.com"
 git checkout forge        # or: frontend / engine (the branch you own)

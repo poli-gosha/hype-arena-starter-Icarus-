@@ -56,6 +56,31 @@ class RunRequest(BaseModel):
     include_claims: bool = False
 
 
+WARM: dict = {}  # the trained attributor + out-of-fold extraction, reused by every request
+WARM_FILE = ROOT / "out" / "cache" / "warm.pkl"
+
+
+def _warm_up():
+    """Train once (about a minute), or load the last training from disk."""
+    import pickle
+    lexicon, bundle = universe()
+    if not WARM and WARM_FILE.exists():
+        try:
+            WARM.update(pickle.loads(WARM_FILE.read_bytes()))
+        except Exception:
+            WARM.clear()
+    if not WARM:
+        pipeline.run(list(bundle.rows), lexicon, bundle, claims=False, warm=WARM)
+        WARM_FILE.parent.mkdir(parents=True, exist_ok=True)
+        WARM_FILE.write_bytes(pickle.dumps(WARM))
+
+
+@app.on_event("startup")
+def _start_warming():
+    import threading
+    threading.Thread(target=_warm_up, daemon=True).start()
+
+
 @lru_cache(maxsize=1)
 def universe():
     lexicon = Lexicon.load(ROOT / "data" / "lexicon.json")
@@ -65,7 +90,7 @@ def universe():
 
 @app.get("/api/health")
 def health():
-    return {"ok": True}
+    return {"ok": True, "warm": bool(WARM)}
 
 
 @app.get("/api/architecture")
@@ -83,7 +108,7 @@ def run(req: RunRequest):
         if i and r.date != req.rows[i - 1].date:
             page += 1
         new.append(Row(r.id, r.text, r.date, "", page))
-    res = pipeline.run(base + new, lexicon, bundle, claims=req.include_claims)
+    res = pipeline.run(base + new, lexicon, bundle, claims=req.include_claims, warm=WARM)
     trace = to_trace(new, res)
     return trace
 
@@ -100,7 +125,7 @@ def sample():
 @lru_cache(maxsize=1)
 def _claims():
     lexicon, bundle = universe()
-    res = pipeline.run(list(bundle.rows), lexicon, bundle)
+    res = pipeline.run(list(bundle.rows), lexicon, bundle, warm=WARM)
     return to_trace([], res)["claims"]
 
 

@@ -2,6 +2,7 @@
 
     python scripts/run_local.py            # practice data, every 5th label hidden
     python scripts/run_local.py --sample   # sample/sample.csv appended to the practice rows
+    python scripts/run_local.py --sample out/fake_sample.csv   # a rehearsal sample
 
 Writes out/universe/ (the input), out/output/output.csv and out/trace.json (for the frontend).
 """
@@ -19,7 +20,8 @@ ROOT = Path(__file__).resolve().parent.parent
 
 def main() -> int:
     p = argparse.ArgumentParser()
-    p.add_argument("--sample", action="store_true", help="append sample/sample.csv (from 09:00 on 29 Oct)")
+    p.add_argument("--sample", nargs="?", const=str(ROOT / "sample" / "sample.csv"), default=None,
+                   help="append a sample's rows (default sample/sample.csv, published 09:00 on 29 Oct)")
     a = p.parse_args()
 
     uni, out = ROOT / "out" / "universe", ROOT / "out" / "output"
@@ -30,7 +32,7 @@ def main() -> int:
     subprocess.run([sys.executable, ROOT / "scripts" / "input.py", ROOT / "data" / "practice.csv", uni / "universe.csv"], check=True)
     shutil.copy(ROOT / "data" / "lexicon.json", uni / "lexicon.json")
     if a.sample:
-        sample = ROOT / "sample" / "sample.csv"
+        sample = Path(a.sample)
         with open(sample, encoding="utf-8-sig", newline="") as f, open(uni / "universe.csv", "a", encoding="utf-8", newline="") as g:
             w = csv.writer(g)
             for r in csv.DictReader(f):

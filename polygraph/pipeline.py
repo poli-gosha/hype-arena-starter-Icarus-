@@ -42,13 +42,17 @@ class Bundle:
 
 
 def run(rows: list[Row], lexicon: Lexicon, bundle: Bundle, *, claims: bool = True,
-        gold_extraction: bool = False, cache: str | Path | None = None) -> Result:
+        gold_extraction: bool = False, cache: str | Path | None = None,
+        warm: dict | None = None) -> Result:
     """Label every unlabelled row and write the claims.
 
     gold_extraction: use the practice forms as the extraction of unlabelled rows too
     (eval only): measures the truth engine alone, as if extraction were perfect.
     cache: (eval only) a pickle file holding the extraction stages' output, so experiments
     on the truth engine and judge skip the slow extraction.
+    warm: (the API) a dict kept between calls: the trained attributor and the out-of-fold
+    extraction of the labelled rows are computed on the first call and reused after, so a
+    demo request only extracts and judges its own new rows.
     """
     stages: list[dict] = []
 
@@ -71,7 +75,7 @@ def run(rows: list[Row], lexicon: Lexicon, bundle: Bundle, *, claims: bool = Tru
         stages.append({"name": "attributor", "ms": 0.0, "count": sum(map(len, facts.values()))})
     else:
         t = time.perf_counter()
-        facts, extracted = _extract(rows, lexicon, bundle, gold_extraction, linker, mentions, values)
+        facts, extracted = _extract(rows, lexicon, bundle, gold_extraction, linker, mentions, values, warm)
         stage("attributor", t, sum(map(len, facts.values())))
         if cache:
             import pickle
@@ -102,7 +106,7 @@ def run(rows: list[Row], lexicon: Lexicon, bundle: Bundle, *, claims: bool = Tru
     return Result(verdicts, out_claims, kb, facts, stages)
 
 
-def _extract(rows, lexicon, bundle, gold_extraction, linker, mentions, values):
+def _extract(rows, lexicon, bundle, gold_extraction, linker, mentions, values, warm=None):
     """The attributor: every row's facts, plus the out-of-fold extraction of the labelled
     rows (see judge.label)."""
     # train the attributor on the practice rows the input labels (never on a hidden one)
@@ -116,6 +120,12 @@ def _extract(rows, lexicon, bundle, gold_extraction, linker, mentions, values):
     # what extraction makes of the labelled rows, from a model that never saw them: the judge
     # trains on these so it learns on facts as noisy as an unlabelled row's
     extracted: dict[str, list[Fact]] = {}
+    key = (frozenset(labelled), gold_extraction)
+    if warm is not None and warm.get("key") == key:
+        attributor = warm["attributor"]
+        for r, fs in zip(todo, attributor.assign_many([(r, values[r.id], mentions[r.id]) for r in todo])):
+            facts[r.id] = fs
+        return facts, dict(warm["extracted"])
     if train:
         bundle_mentions = link_pages(linker, bundle.rows)
         attributor = attributor_mod.Attributor(lexicon).fit(train, bundle.forms, bundle_mentions)
@@ -133,6 +143,8 @@ def _extract(rows, lexicon, bundle, gold_extraction, linker, mentions, values):
                 att_k = attributor_mod.Attributor(lexicon).fit(tr, bundle.forms, bundle_mentions)
                 for r, fs in zip(te, att_k.assign_many([(r, values[r.id], mentions[r.id]) for r in te])):
                     extracted[r.id] = fs
+        if warm is not None:
+            warm.update(key=key, attributor=attributor, extracted=dict(extracted))
     return facts, extracted
 
 
