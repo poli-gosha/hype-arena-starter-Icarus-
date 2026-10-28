@@ -8,3 +8,5 @@ server
 scripts
 **/__pycache__
 **/*.pyc
+
+video

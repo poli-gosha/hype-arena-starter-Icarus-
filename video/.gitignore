@@ -1,0 +1,7 @@
+.venv/
+media/
+*.log
+sheet*.png
+dbg.png
+polygraph_preview.mp4
+__pycache__/
