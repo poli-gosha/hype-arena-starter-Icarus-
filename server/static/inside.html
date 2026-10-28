@@ -6,158 +6,342 @@
 <title>Polygraph · Inside the machine</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg: #F5F5F1; --card: #FFFFFF; --ink: #111214; --soft: #5C6170; --line: #E2E2DC; --dot: #D3D3CB;
-    --green: #1E8E4F; --green-bg: #E6F4EC; --red: #C8303F; --red-bg: #FBE9EB;
-    --amber: #A86B00; --amber-bg: #FFF3DA; --blue: #2859B5; --blue-bg: #E8EEFA;
-    --font: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif; --mono: ui-monospace, Consolas, monospace;
+    --bg: #0A0A0A; --ink: #FCFCFC; --text: #D6D8DD; --dim: #8A90A0; --faint: #5E6474;
+    --lime: #D7F13B; --blue: #4F86F7; --red: #FF4D5E; --amber: #FFB020; --green: #3DDC84; --purple: #A77BFF; --teal: #2CC6B8;
+    --glass: rgba(20, 22, 28, .5); --glass-hi: rgba(255, 255, 255, .045); --stroke: rgba(255, 255, 255, .09); --stroke-hi: rgba(255, 255, 255, .16);
+    --blur: blur(22px) saturate(150%);
+    --head: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif; --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+    --ease: cubic-bezier(.22, 1, .36, 1);
   }
-  * { box-sizing: border-box; }
-  html, body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.5 var(--font); }
+  * { box-sizing: border-box; -webkit-font-smoothing: antialiased; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--head); }
   a { color: inherit; }
-  header { display: flex; align-items: center; gap: 16px; padding: 14px 24px; border-bottom: 1px solid var(--line); background: var(--card); }
-  header .back { text-decoration: none; color: var(--soft); font-weight: 500; }
-  header .name { font-weight: 800; }
-  header .note { margin-left: auto; color: var(--soft); font-size: 14px; }
+  button { font-family: inherit; }
 
-  /* picking a sentence */
-  .picker { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 14px 24px 0; }
-  .chips { display: flex; gap: 6px; }
-  .chips button, .nav button { font: 500 13px var(--font); padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); cursor: pointer; }
-  .chips button.on { background: var(--ink); color: #fff; border-color: var(--ink); }
-  select { font: 14px var(--font); padding: 7px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); flex: 1; min-width: 0; max-width: 720px; }
-  .nav { display: flex; gap: 6px; }
+  /* the universe behind the glass, as on the story site */
+  #bg { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+  .orb { position: fixed; border-radius: 50%; filter: blur(70px); z-index: 0; pointer-events: none; transition: background 1.6s; }
+  .orb.a { width: 52vw; height: 52vw; left: -16vw; top: 8vh; background: radial-gradient(circle, rgba(79,134,247,.30), transparent 62%); animation: drift-a 34s ease-in-out infinite alternate; }
+  .orb.b { width: 44vw; height: 44vw; right: -14vw; top: -14vh; background: radial-gradient(circle, rgba(215,241,59,.16), transparent 62%); animation: drift-b 40s ease-in-out infinite alternate; }
+  .orb.c { width: 50vw; height: 50vw; left: 32vw; bottom: -28vh; background: radial-gradient(circle, rgba(167,123,255,.20), transparent 62%); animation: drift-a 46s ease-in-out infinite alternate-reverse; }
+  body[data-verdict="false"] .orb.c { background: radial-gradient(circle, rgba(255,77,94,.20), transparent 62%); }
+  body[data-verdict="true"] .orb.c { background: radial-gradient(circle, rgba(61,220,132,.17), transparent 62%); }
+  body[data-verdict="unsure"] .orb.c { background: radial-gradient(circle, rgba(255,176,32,.17), transparent 62%); }
+  @keyframes drift-a { to { transform: translate(8vw, -6vh) scale(1.1); } }
+  @keyframes drift-b { to { transform: translate(-10vw, 8vh) scale(.92); } }
+  .vig { position: fixed; inset: 0; z-index: 0; pointer-events: none; background: radial-gradient(ellipse at 50% 40%, transparent 45%, rgba(3,3,4,.7) 100%); }
+  .app { position: relative; z-index: 1; }
+  .glass { background: var(--glass); border: 1px solid var(--stroke); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur);
+    box-shadow: 0 18px 50px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.06); }
 
-  .head { padding: 18px 24px 6px; }
-  .sub { color: var(--soft); }
-  .sentence { font-size: clamp(22px, 2.4vw, 32px); font-weight: 800; line-height: 1.25; letter-spacing: -.01em; margin: 4px 0 10px; max-width: 1100px; }
-  .verdict { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
-  .verdict .ok { color: var(--green); font-weight: 700; } .verdict .no { color: var(--red); font-weight: 700; }
-  .verdict .actions { margin-left: auto; display: flex; gap: 8px; }
-  .verdict .actions button { font: 600 14px var(--font); padding: 7px 16px; border-radius: 999px; border: 1px solid var(--ink); background: var(--card); cursor: pointer; }
-  .pill { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 13px; font-weight: 600; }
-  .pill.true { background: var(--green-bg); color: var(--green); } .pill.false { background: var(--red-bg); color: var(--red); }
-  .pill.unsure { background: var(--amber-bg); color: var(--amber); }
+  /* top bar */
+  .top { position: sticky; top: 0; z-index: 40; display: flex; align-items: center; gap: 16px; padding: 12px 28px;
+    background: rgba(10,10,12,.55); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); border-bottom: 1px solid var(--stroke); }
+  .brand { font: 500 11px var(--mono); letter-spacing: .2em; color: var(--dim); white-space: nowrap; }
+  .brand b { color: var(--lime); font-weight: 500; }
+  .picker { display: flex; gap: 8px; align-items: center; flex: 1; min-width: 0; justify-content: center; }
+  .chips { display: flex; gap: 6px; flex: none; }
+  .chip { font: 500 11px var(--mono); letter-spacing: .08em; text-transform: uppercase; padding: 7px 12px; border-radius: 999px;
+    border: 1px solid var(--stroke); background: var(--glass-hi); color: var(--dim); cursor: pointer; transition: all .25s; }
+  .chip:hover { color: var(--ink); border-color: var(--stroke-hi); }
+  .chip.on { background: var(--lime); color: #0A0A0A; border-color: var(--lime); }
+  select { appearance: none; -webkit-appearance: none; font: 14px var(--head); color: var(--ink); min-width: 0; flex: 1; max-width: 560px;
+    background: rgba(255,255,255,.05) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%238A90A0' stroke-width='1.6'/%3E%3C/svg%3E") no-repeat right 12px center;
+    border: 1px solid var(--stroke); border-radius: 12px; padding: 8px 34px 8px 12px; cursor: pointer; }
+  select option { background: #15171C; color: var(--ink); }
+  .round { width: 34px; height: 34px; flex: none; border-radius: 50%; border: 1px solid var(--stroke); background: var(--glass-hi); color: var(--ink); cursor: pointer; transition: all .2s; }
+  .round:hover { border-color: var(--lime); color: var(--lime); }
+  .back { font: 700 13px var(--head); color: #0A0A0A; background: var(--lime); padding: 8px 15px; border-radius: 999px; text-decoration: none; white-space: nowrap;
+    box-shadow: 0 0 24px rgba(215,241,59,.25); }
 
-  /* the canvas */
-  .wrap { margin: 12px 24px 0; border: 1px solid var(--line); border-radius: 16px; overflow-x: auto; overflow-y: hidden; position: relative;
-    background-color: #FAFAF7; background-image: radial-gradient(var(--dot) 1.2px, transparent 1.2px); background-size: 22px 22px; }
-  .sizer { position: relative; }
-  .canvas { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
-  svg.edges { position: absolute; inset: 0; overflow: visible; }
-  .edge path.base { fill: none; stroke: #C9CBC4; stroke-width: 2.2; transition: stroke .4s; }
-  .edge path.flow { fill: none; stroke: var(--blue); stroke-width: 2.6; stroke-dasharray: 7 7; opacity: 0; }
-  .edge.flowing path.flow { opacity: 1; animation: dash .5s linear infinite; }
-  .edge.done path.base { stroke: #8FC7A5; }
-  .edge circle.packet { fill: var(--blue); }
-  .edge .lab { opacity: 0; transition: opacity .35s; }
-  .edge.done .lab { opacity: 1; }
-  .edge .lab rect { fill: #fff; stroke: var(--line); }
-  .edge .lab text { font: 600 12px var(--font); fill: var(--soft); }
-  @keyframes dash { to { stroke-dashoffset: -14; } }
+  /* the sentence */
+  .hero { max-width: 1440px; margin: 0 auto; padding: 46px 32px 30px; }
+  .kicker { font: 500 12px var(--mono); letter-spacing: .2em; color: var(--lime); text-transform: uppercase; }
+  .sentence { font-weight: 800; font-size: clamp(28px, 3.5vw, 52px); line-height: 1.1; letter-spacing: -.02em; margin: 14px 0 24px; max-width: 1150px; text-wrap: balance; }
+  .hm { border-radius: 10px; padding: 0 .1em; transition: background 1s var(--ease), color 1s var(--ease), box-shadow 1s var(--ease); }
+  #hero.lit-linker .hm.subj { background: rgba(79,134,247,.2); color: #AFC8FF; box-shadow: 0 0 0 1px rgba(79,134,247,.45), 0 0 26px rgba(79,134,247,.25); }
+  #hero.lit-reader .hm.val { background: rgba(215,241,59,.14); color: #F0FF8F; box-shadow: 0 0 0 1px rgba(215,241,59,.4), 0 0 26px rgba(215,241,59,.2); }
+  .vrow { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .tag { display: inline-flex; gap: 10px; align-items: center; padding: 9px 16px; border-radius: 999px; font: 600 14px var(--head); color: var(--text);
+    transition: opacity .8s var(--ease), filter .8s var(--ease), transform .8s var(--ease); }
+  .tag small { font: 500 10.5px var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--dim); }
+  .tag.pend { opacity: .18; filter: blur(5px); transform: translateY(6px); }
+  .lab { display: inline-block; font: 600 11px var(--mono); letter-spacing: .12em; text-transform: uppercase; padding: 3px 9px; border-radius: 999px; }
+  .lab.true { color: var(--green); background: rgba(61,220,132,.12); box-shadow: inset 0 0 0 1px rgba(61,220,132,.35); }
+  .lab.false { color: var(--red); background: rgba(255,77,94,.12); box-shadow: inset 0 0 0 1px rgba(255,77,94,.38); }
+  .lab.unsure { color: var(--amber); background: rgba(255,176,32,.12); box-shadow: inset 0 0 0 1px rgba(255,176,32,.38); }
+  .lab.big { font-size: 13px; padding: 5px 12px; }
+  .ok { color: var(--green); font-weight: 700; } .no { color: var(--red); font-weight: 700; }
 
-  .node { position: absolute; background: var(--card); border: 1.5px solid var(--line); border-radius: 14px; padding: 12px;
-    display: grid; grid-template-columns: 40px 1fr; gap: 10px; align-items: start; cursor: pointer; opacity: .5;
-    transition: opacity .35s, border-color .35s, box-shadow .35s, transform .2s; box-shadow: 0 1px 2px rgba(17,18,20,.05); }
-  .node:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(17,18,20,.08); }
-  .node.running { opacity: 1; border-color: var(--blue); box-shadow: 0 0 0 5px rgba(40,89,181,.13); }
-  .node.done { opacity: 1; border-color: #8FC7A5; }
-  .node.sel { box-shadow: 0 0 0 3px var(--ink); }
-  .node .ic { width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; }
-  .node .ic svg { width: 22px; height: 22px; fill: none; stroke: #fff; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-  .node .t { font-weight: 700; font-size: 15px; line-height: 1.2; }
-  .node .s { font-size: 13px; line-height: 1.35; color: var(--soft); margin-top: 4px; opacity: 0; transition: opacity .4s;
-    display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
-  .node.done .s { opacity: 1; }
-  .node .s b { color: var(--ink); font-weight: 600; }
-  .node .badge { position: absolute; top: -9px; right: -9px; width: 22px; height: 22px; border-radius: 50%; display: none; }
-  .node.running .badge { display: block; border: 3px solid var(--blue-bg); border-top-color: var(--blue); animation: spin .7s linear infinite; background: #fff; }
-  .node.done .badge { display: grid; place-items: center; background: var(--green); }
-  .node.done .badge::after { content: ""; width: 9px; height: 5px; border-left: 2.5px solid #fff; border-bottom: 2.5px solid #fff; transform: translateY(-1px) rotate(-45deg); }
-  .node .port { position: absolute; top: 50%; width: 11px; height: 11px; margin-top: -5.5px; border-radius: 50%; background: #fff; border: 2px solid #B9BBB3; }
-  .node .port.in { left: -6.5px; } .node .port.out { right: -6.5px; }
-  .node.done .port { border-color: #8FC7A5; }
+  /* the two columns */
+  .grid { display: grid; grid-template-columns: minmax(330px, 410px) minmax(0, 1fr); gap: 28px; max-width: 1440px; margin: 0 auto; padding: 0 32px 120px; align-items: start; }
+  .flowcol { position: sticky; top: 78px; height: calc(100vh - 98px); min-height: 520px; border-radius: 24px; padding: 18px 18px 14px; display: flex; flex-direction: column; }
+  .fhead { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+  .fhead .fnote { font: 400 11px var(--mono); color: var(--dim); text-align: right; }
+  .flowbox { flex: 1; position: relative; min-height: 0; margin: 8px 0; }
+  .flow { position: absolute; left: 50%; top: 0; transform-origin: top center; }
+  svg.wires { position: absolute; inset: 0; overflow: visible; }
+  .wire { fill: none; stroke: rgba(255,255,255,.13); stroke-width: 1.6; transition: stroke .6s; }
+  .edge.flowing .wire { stroke: rgba(215,241,59,.85); }
+  .edge.done .wire { stroke: rgba(215,241,59,.38); }
+  .edge.hot .wire { stroke: rgba(215,241,59,.8); }
+  .stream { fill: none; stroke: var(--lime); stroke-width: 1.7; stroke-linecap: round; stroke-dasharray: 1.5 13; opacity: 0; transition: opacity .6s; }
+  .edge.done .stream { opacity: .75; animation: stream 1.8s linear infinite; }
+  @keyframes stream { to { stroke-dashoffset: -29; } }
+  .packet { fill: #F2FF9E; }
+  .elab { opacity: 0; transition: opacity .5s; }
+  .edge.done .elab { opacity: 1; }
+  .elab rect { fill: rgba(14,16,20,.92); stroke: rgba(255,255,255,.12); }
+  .elab text { font: 500 10.5px var(--mono); fill: #B4BAC6; }
+
+  .node { position: absolute; display: flex; align-items: center; gap: 11px; padding: 0 12px; border-radius: 16px; cursor: pointer;
+    background: rgba(24,26,33,.72); border: 1px solid var(--stroke); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+    opacity: .4; transition: opacity .5s, border-color .5s, box-shadow .5s, transform .5s var(--ease); }
+  .node:hover { opacity: 1; }
+  .node .ic, .card .ic { width: 32px; height: 32px; flex: none; border-radius: 10px; display: grid; place-items: center;
+    background: color-mix(in srgb, var(--c) 16%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 45%, transparent); }
+  .node .ic svg, .card .ic svg { width: 18px; height: 18px; fill: none; stroke: var(--c); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .node .tx { min-width: 0; }
+  .node .nm { font: 700 14px var(--head); line-height: 1.2; white-space: nowrap; }
+  .node .st { font: 500 10.5px var(--mono); color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+  .node.running { opacity: 1; border-color: rgba(215,241,59,.75); box-shadow: 0 0 0 4px rgba(215,241,59,.1), 0 0 32px rgba(215,241,59,.25); }
+  .node.done { opacity: .92; }
+  .node.done .st { color: var(--text); }
+  .node.active { opacity: 1; transform: scale(1.045); border-color: color-mix(in srgb, var(--c) 75%, transparent);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--c) 30%, transparent), 0 0 36px color-mix(in srgb, var(--c) 32%, transparent); }
+  .node .badge { position: absolute; top: -7px; right: -7px; width: 18px; height: 18px; border-radius: 50%; display: none; }
+  .node.running .badge { display: block; border: 2.5px solid rgba(215,241,59,.2); border-top-color: var(--lime); background: #111; animation: spin .7s linear infinite; }
+  .node.done .badge { display: grid; place-items: center; background: var(--lime); box-shadow: 0 0 12px rgba(215,241,59,.5); }
+  .node.done .badge::after { content: ""; width: 7px; height: 4px; border-left: 2px solid #0A0A0A; border-bottom: 2px solid #0A0A0A; transform: translateY(-1px) rotate(-45deg); }
+  .port { position: absolute; width: 9px; height: 9px; border-radius: 50%; background: #14161B; border: 1.5px solid rgba(255,255,255,.28); transition: border-color .5s, box-shadow .5s; }
+  .port.t { top: -5px; left: 50%; margin-left: -4.5px; } .port.b { bottom: -5px; left: 50%; margin-left: -4.5px; } .port.l { left: -5px; top: 50%; margin-top: -4.5px; }
+  .node.done .port { border-color: var(--lime); box-shadow: 0 0 8px rgba(215,241,59,.5); }
   @keyframes spin { to { transform: rotate(360deg); } }
-  .hint { margin: 10px 24px 40px; color: var(--soft); font-size: 14px; }
 
-  /* the node panel, like opening a node in n8n */
-  .scrim { position: fixed; inset: 0; background: rgba(17,18,20,.25); opacity: 0; pointer-events: none; transition: opacity .25s; z-index: 20; }
-  .scrim.open { opacity: 1; pointer-events: auto; }
-  .panel { position: fixed; top: 0; right: 0; bottom: 0; width: min(680px, 100vw); background: var(--card); z-index: 21; overflow: auto;
-    transform: translateX(102%); transition: transform .32s cubic-bezier(.2,.8,.2,1); box-shadow: -12px 0 40px rgba(17,18,20,.12); }
-  .panel.open { transform: none; }
-  .panel .ph { position: sticky; top: 0; background: var(--card); border-bottom: 1px solid var(--line); padding: 16px 22px; display: flex; gap: 12px; align-items: center; z-index: 2; }
-  .panel .ph .ic { width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center; flex: none; }
-  .panel .ph .ic svg { width: 21px; height: 21px; fill: none; stroke: #fff; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-  .panel .ph h2 { margin: 0; font-size: 19px; }
-  .panel .ph .io { font-size: 13px; color: var(--soft); }
-  .panel .ph .btns { margin-left: auto; display: flex; gap: 6px; flex: none; }
-  .panel .ph button { font: 600 15px var(--font); width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line); background: var(--card); cursor: pointer; }
-  .panel .ph button:disabled { opacity: .35; cursor: default; }
-  .panel .pb { padding: 18px 22px 40px; }
-  .what { color: var(--soft); margin: 0 0 14px; font-size: 15px; }
-  .hl { font-size: 19px; line-height: 1.6; }
-  mark { padding: 1px 3px; border-radius: 4px; }
-  mark.subj { background: var(--blue-bg); color: var(--blue); font-weight: 600; }
-  mark.val { background: #F1F8C8; color: #4A5A00; font-weight: 600; }
-  table { width: 100%; border-collapse: collapse; font-size: 14px; }
-  th { text-align: left; font-size: 12px; color: var(--soft); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; padding: 6px 8px; border-bottom: 1px solid var(--line); }
-  td { padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
-  tr.self td { background: var(--blue-bg); }
-  .bar { height: 10px; border-radius: 5px; background: var(--line); position: relative; min-width: 80px; }
-  .bar i { position: absolute; inset: 0 auto 0 0; border-radius: 5px; background: var(--soft); }
-  .bar.win i { background: var(--blue); }
-  .chosen { color: var(--green); font-weight: 700; }
-  .box { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-top: 12px; }
-  .box.warn { background: var(--amber-bg); border-color: #F2DDB0; }
-  .fact { margin-bottom: 18px; }
-  .fact h3 { margin: 0 0 6px; font-size: 16px; }
-  .chart svg { width: 100%; height: auto; display: block; border: 1px solid var(--line); border-radius: 10px; background: #FBFBF8; }
-  .legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 13px; color: var(--soft); margin-top: 6px; }
-  .legend span::before { content: "●"; margin-right: 5px; }
-  .legend .t::before { color: var(--green); } .legend .f::before { color: var(--red); } .legend .u::before { color: #9AA0AB; }
-  .legend .s::before { color: var(--blue); } .legend .st::before { content: "━"; color: #7FA600; }
-  .probs div { display: grid; grid-template-columns: 76px 1fr 56px; gap: 10px; align-items: center; margin: 6px 0; }
-  .probs .bar { height: 14px; }
-  .rule { font-size: 17px; margin: 14px 0 4px; }
-  .evidence { display: grid; grid-template-columns: 1fr auto; gap: 4px 16px; font-size: 14px; }
-  .evidence span:nth-child(2n) { font-variant-numeric: tabular-nums; font-weight: 600; text-align: right; }
-  details summary { cursor: pointer; color: var(--soft); margin-top: 12px; }
-  code { font-family: var(--mono); }
-  pre.csv { background: #111214; color: #F5F5F1; padding: 14px 16px; border-radius: 10px; font: 14px var(--mono); overflow: auto; margin: 0; }
-  .empty { color: var(--soft); padding: 40px 24px; }
-  @media (max-width: 700px) {
-    header, .picker, .head { padding-left: 16px; padding-right: 16px; } .wrap { margin: 12px 16px 0; } .hint { margin: 10px 16px 40px; }
-    .verdict .actions { margin-left: 0; } header .note { display: none; } }
+  .ffoot { border-top: 1px solid var(--stroke); padding-top: 12px; }
+  .segs { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; margin-bottom: 10px; }
+  .seg { height: 4px; border-radius: 99px; background: rgba(255,255,255,.08); transition: background .5s, box-shadow .5s; cursor: pointer; }
+  .seg.run { background: rgba(215,241,59,.55); animation: blink .8s ease-in-out infinite alternate; }
+  .seg.done { background: color-mix(in srgb, var(--c) 70%, transparent); }
+  .seg.active { box-shadow: 0 0 10px var(--c); background: var(--c); }
+  @keyframes blink { from { opacity: .45; } }
+  .frow { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  #stage { font: 500 11px var(--mono); letter-spacing: .12em; color: var(--text); text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .btns { display: flex; gap: 6px; align-items: center; flex: none; }
+  .btn { font: 600 12px var(--head); padding: 6px 11px; border-radius: 999px; border: 1px solid var(--stroke); background: var(--glass-hi); color: var(--ink); cursor: pointer; transition: all .2s; }
+  .btn:hover { border-color: var(--lime); color: var(--lime); }
+  .follow { display: inline-flex; gap: 6px; align-items: center; font: 600 12px var(--head); color: var(--dim); cursor: pointer; user-select: none; }
+  .follow input { appearance: none; -webkit-appearance: none; width: 26px; height: 15px; border-radius: 99px; background: rgba(255,255,255,.12); position: relative; margin: 0; cursor: pointer; transition: background .25s; }
+  .follow input::after { content: ""; position: absolute; top: 2px; left: 2px; width: 11px; height: 11px; border-radius: 50%; background: #fff; transition: transform .25s var(--ease); }
+  .follow input:checked { background: var(--lime); } .follow input:checked::after { transform: translateX(11px); background: #0A0A0A; }
+
+  /* the stage cards */
+  .cards { display: flex; flex-direction: column; gap: 22px; min-width: 0; container-type: inline-size; }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+  @container (max-width: 760px) { .pair { grid-template-columns: 1fr; } }
+  .pairnote { font: 500 11px var(--mono); letter-spacing: .14em; color: var(--dim); text-transform: uppercase; margin: 4px 4px -10px; display: flex; gap: 10px; align-items: center; }
+  .pairnote::before, .pairnote::after { content: ""; height: 1px; flex: 1; background: linear-gradient(90deg, transparent, var(--stroke-hi), transparent); }
+  .card { --c: var(--lime); position: relative; border-radius: 24px; padding: 26px 28px 28px; overflow: hidden; scroll-margin-top: 92px;
+    opacity: .5; transition: opacity .7s var(--ease), border-color .7s, box-shadow .7s; }
+  .card::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 1px; background: linear-gradient(90deg, transparent, var(--c), transparent); opacity: 0; transition: opacity .7s; }
+  .card::after { content: ""; position: absolute; inset: -40% -10% auto auto; width: 60%; height: 80%; pointer-events: none; opacity: 0; transition: opacity 1s;
+    background: radial-gradient(circle, color-mix(in srgb, var(--c) 14%, transparent), transparent 65%); }
+  .card.running, .card.in { opacity: 1; }
+  .card.in::before { opacity: .85; } .card.in::after { opacity: 1; }
+  .card.active { border-color: color-mix(in srgb, var(--c) 38%, transparent);
+    box-shadow: 0 18px 50px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.06), 0 0 0 1px color-mix(in srgb, var(--c) 18%, transparent), 0 0 70px color-mix(in srgb, var(--c) 10%, transparent); }
+  .scan { position: absolute; left: 0; right: 0; top: 0; height: 2px; opacity: 0; overflow: hidden; }
+  .card.running .scan { opacity: 1; }
+  .scan::before { content: ""; position: absolute; top: 0; bottom: 0; width: 40%; background: linear-gradient(90deg, transparent, var(--lime), transparent); animation: scan 1s linear infinite; }
+  @keyframes scan { from { left: -40%; } to { left: 100%; } }
+  .ch { display: flex; gap: 14px; align-items: center; position: relative; }
+  .card .ic { width: 42px; height: 42px; border-radius: 13px; }
+  .card .ic svg { width: 22px; height: 22px; }
+  .num { font: 500 11px var(--mono); letter-spacing: .16em; color: var(--c); text-transform: uppercase; }
+  .card h3 { font: 800 25px var(--head); letter-spacing: -.01em; margin: 2px 0 0; }
+  .state { margin-left: auto; font: 500 10.5px var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--faint); display: inline-flex; gap: 7px; align-items: center; white-space: nowrap; }
+  .state::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+  .card.running .state { color: var(--lime); } .card.running .state::before { animation: blink .5s ease-in-out infinite alternate; box-shadow: 0 0 8px var(--lime); }
+  .card.in .state { color: var(--green); }
+  .what { color: var(--text); font-size: 15.5px; line-height: 1.6; margin: 14px 0 14px; max-width: 70ch; position: relative; }
+  .io { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; position: relative; }
+  .io span { font: 500 10.5px var(--mono); letter-spacing: .04em; color: var(--dim); padding: 5px 10px; border-radius: 999px; border: 1px solid var(--stroke); background: rgba(255,255,255,.03); }
+  .io b { color: var(--ink); font-weight: 500; }
+  .body { position: relative; opacity: 0; filter: blur(10px); transform: translateY(12px); transition: opacity .8s var(--ease), filter .8s var(--ease), transform .8s var(--ease); }
+  .card.in .body { opacity: 1; filter: none; transform: none; }
+
+  /* what goes inside the cards */
+  .sub { color: var(--dim); }
+  .mono { font-family: var(--mono); }
+  .sent { font-size: 20px; line-height: 1.65; color: var(--text); padding: 16px 18px; border-radius: 16px; background: rgba(255,255,255,.03); border: 1px solid var(--stroke); }
+  mark { background: transparent; color: inherit; border-radius: 6px; padding: 1px 4px; transition: background .8s var(--ease), color .8s, box-shadow .8s; transition-delay: calc(var(--i, 0) * 140ms + 350ms); }
+  .card.in mark.subj { background: rgba(79,134,247,.2); color: #AFC8FF; box-shadow: 0 0 0 1px rgba(79,134,247,.45); }
+  .card.in mark.val { background: rgba(215,241,59,.14); color: #F0FF8F; box-shadow: 0 0 0 1px rgba(215,241,59,.4); }
+  .rise { opacity: 0; transform: translateY(10px); transition: opacity .6s var(--ease), transform .6s var(--ease); transition-delay: calc(var(--i, 0) * 70ms + 250ms); }
+  .card.in .rise { opacity: 1; transform: none; }
+  .pagelist { display: flex; flex-direction: column; gap: 8px; }
+  .pl { display: flex; gap: 14px; justify-content: space-between; align-items: center; padding: 11px 14px; border-radius: 12px; background: rgba(255,255,255,.03); border: 1px solid transparent; font-size: 15px; color: var(--text); }
+  .pl.self { border-color: rgba(215,241,59,.35); background: rgba(215,241,59,.06); color: var(--ink); box-shadow: inset 3px 0 0 var(--lime); }
+  .pl em { font: 500 10px var(--mono); letter-spacing: .14em; font-style: normal; white-space: nowrap; color: var(--dim); }
+  .pl.self em { color: var(--lime); }
+  .stats { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+  .stat { padding: 10px 14px; border-radius: 12px; background: rgba(255,255,255,.03); border: 1px solid var(--stroke); }
+  .stat b { display: block; font: 700 18px var(--head); color: var(--ink); }
+  .stat small { font: 500 10px var(--mono); letter-spacing: .1em; color: var(--dim); text-transform: uppercase; }
+  .tokens { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+  .tok { display: inline-flex; gap: 8px; align-items: baseline; padding: 7px 12px; border-radius: 12px; background: rgba(79,134,247,.1); border: 1px solid rgba(79,134,247,.3); font-weight: 600; }
+  .tok small { font: 400 11px var(--mono); color: var(--dim); }
+  .note { margin-top: 12px; font-size: 14px; color: var(--dim); line-height: 1.55; }
+  .parse { margin-top: 14px; display: flex; flex-direction: column; gap: 10px; }
+  .pr { display: grid; grid-template-columns: minmax(0, auto) 24px minmax(0, 1fr); gap: 12px; align-items: center; padding: 12px 14px; border-radius: 14px; background: rgba(255,255,255,.03); border: 1px solid var(--stroke); }
+  .pr .w { font: 600 16px var(--head); color: #F0FF8F; }
+  .pr .arr { color: var(--lime); text-align: center; }
+  .pr .r b { font: 700 17px var(--head); }
+  .pr .r code { display: block; font: 400 11px var(--mono); color: var(--dim); margin-top: 3px; overflow-wrap: anywhere; }
+  .neg { font: 500 10px var(--mono); letter-spacing: .1em; color: var(--red); margin-left: 8px; }
+  .cands { margin-top: 12px; padding: 16px; border-radius: 16px; background: rgba(255,255,255,.03); border: 1px solid var(--stroke); }
+  .cands + .cands { margin-top: 12px; }
+  .cands h4 { margin: 0 0 12px; font: 700 16px var(--head); display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+  .cands h4 small { font: 400 11px var(--mono); color: var(--dim); }
+  .crow { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(70px, 1fr) 54px 52px; gap: 12px; align-items: center; padding: 6px 0; font-size: 14px; color: var(--text); }
+  .crow.head { font: 500 10px var(--mono); letter-spacing: .12em; color: var(--faint); text-transform: uppercase; padding-top: 0; }
+  .crow .nmc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .crow.win { color: var(--ink); font-weight: 600; }
+  .crow .p, .crow .s { font: 500 12px var(--mono); text-align: right; color: var(--dim); }
+  .crow.win .s { color: var(--lime); }
+  .bar { height: 7px; border-radius: 99px; background: rgba(255,255,255,.07); overflow: hidden; }
+  .bar i { display: block; height: 100%; width: 0; border-radius: 99px; background: rgba(255,255,255,.3); transition: width 1.1s var(--ease); transition-delay: calc(var(--i, 0) * 90ms + 300ms); }
+  .card.in .bar i { width: var(--w); }
+  .crow.win .bar i { background: linear-gradient(90deg, #7C4DCC, #C9B0FF); box-shadow: 0 0 12px rgba(167,123,255,.7); }
+  .chosen { color: var(--lime); }
+  .fchips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .fchip { padding: 9px 13px; border-radius: 12px; background: rgba(44,198,184,.08); border: 1px solid rgba(44,198,184,.3); font-size: 14px; color: var(--text); }
+  .fchip b { color: var(--ink); }
+  .callout { display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px; border-radius: 14px; margin-bottom: 14px; font-size: 15px; line-height: 1.5; color: var(--text);
+    background: rgba(61,220,132,.07); border: 1px solid rgba(61,220,132,.25); }
+  .callout.warn { background: rgba(255,176,32,.08); border-color: rgba(255,176,32,.32); }
+  .callout i { font-style: normal; font-weight: 800; color: var(--green); } .callout.warn i { color: var(--amber); }
+  .cap { font: 500 10.5px var(--mono); letter-spacing: .14em; color: var(--dim); text-transform: uppercase; margin: 18px 0 10px; }
+  .fact { padding: 16px; border-radius: 18px; background: rgba(255,255,255,.025); border: 1px solid var(--stroke); }
+  .fact + .fact { margin-top: 14px; }
+  .fact h4 { margin: 0 0 12px; font: 700 16px var(--head); display: flex; justify-content: space-between; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .stt { font: 600 10.5px var(--mono); letter-spacing: .12em; text-transform: uppercase; padding: 4px 10px; border-radius: 999px; }
+  .stt.agrees { color: var(--green); background: rgba(61,220,132,.12); } .stt.stale { color: var(--amber); background: rgba(255,176,32,.12); }
+  .stt.premature { color: #8FB4FF; background: rgba(79,134,247,.15); } .stt.invented { color: var(--red); background: rgba(255,77,94,.13); }
+  .stt.unknown, .stt.none { color: var(--dim); background: rgba(255,255,255,.06); }
+  svg.tl { width: 100%; height: auto; display: block; border-radius: 12px; background: rgba(0,0,0,.25); }
+  svg.tl .draw { stroke-dasharray: 1; stroke-dashoffset: 1; transition: stroke-dashoffset 1.6s var(--ease) .35s; }
+  .card.in svg.tl .draw { stroke-dashoffset: 0; }
+  svg.tl .pop { transform-box: fill-box; transform-origin: center; transform: scale(0); transition: transform .5s cubic-bezier(.34,1.56,.64,1); transition-delay: var(--d, 0ms); }
+  .card.in svg.tl .pop { transform: scale(1); }
+  svg.tl .ring { transform-box: fill-box; transform-origin: center; }
+  .card.in svg.tl .ring { animation: ring 1.8s ease-out 1.6s infinite; }
+  @keyframes ring { 0% { transform: scale(1); opacity: 1; } 70% { transform: scale(1.8); opacity: 0; } 100% { opacity: 0; } }
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; font: 400 11px var(--mono); color: var(--dim); margin: 10px 2px 0; }
+  .legend span::before { content: "●"; margin-right: 6px; }
+  .legend .t::before { color: var(--green); } .legend .f::before { color: var(--red); } .legend .u::before { color: #A8AEBB; }
+  .legend .s::before { color: var(--blue); } .legend .st::before { content: "━"; color: var(--lime); }
+  .says { margin-top: 12px; font-size: 15px; line-height: 1.6; color: var(--text); }
+  .says b { color: var(--ink); }
+  .meter { margin: 6px 0 4px; padding: 30px 16px 14px; border-radius: 16px; background: rgba(255,255,255,.03); border: 1px solid var(--stroke); }
+  .track { position: relative; height: 12px; border-radius: 99px;
+    background: linear-gradient(90deg, rgba(61,220,132,.45), rgba(61,220,132,.2) calc(var(--cut) * 100%), rgba(255,77,94,.25) calc(var(--cut) * 100%), rgba(255,77,94,.55)); }
+  .cut { position: absolute; left: calc(var(--cut) * 100%); top: -8px; bottom: -8px; width: 2px; margin-left: -1px; background: rgba(255,255,255,.8); }
+  .cut::after { content: attr(data-l); position: absolute; top: -18px; left: 50%; transform: translateX(-50%); font: 500 10px var(--mono); color: var(--dim); white-space: nowrap; }
+  .needle { position: absolute; left: 0; top: -14px; height: 40px; width: 3px; margin-left: -1.5px; border-radius: 2px; background: var(--lime); box-shadow: 0 0 14px var(--lime);
+    transition: left 1.8s cubic-bezier(.34, 1.45, .64, 1) .35s; }
+  .needle::before { content: ""; position: absolute; left: 50%; bottom: -5px; width: 9px; height: 9px; margin-left: -4.5px; border-radius: 50%; background: var(--lime); }
+  .card.in .needle { left: calc(var(--p) * 100%); animation: tremor .16s linear 2.3s infinite alternate; }
+  @keyframes tremor { to { transform: translateX(1px); } }
+  .ends { display: flex; justify-content: space-between; font: 500 10.5px var(--mono); letter-spacing: .1em; color: var(--dim); margin-top: 12px; text-transform: uppercase; }
+  .ends span:first-child { color: var(--green); } .ends span:last-child { color: var(--red); }
+  .rule { font-size: 18px; line-height: 1.5; margin: 16px 0 6px; color: var(--text); }
+  .rule b { color: var(--ink); font-family: var(--mono); font-weight: 500; }
+  .probs { display: flex; flex-direction: column; gap: 9px; margin-top: 4px; }
+  .probs > div { display: grid; grid-template-columns: 76px 1fr 60px; gap: 12px; align-items: center; }
+  .probs .bar { height: 9px; }
+  .probs span:last-child { font: 500 12px var(--mono); text-align: right; color: var(--text); }
+  .evidence { display: grid; grid-template-columns: 1fr auto; gap: 0 18px; font-size: 14px; }
+  .evidence > span { padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,.05); color: var(--text); }
+  .evidence > span:nth-child(2n) { font: 500 13px var(--mono); color: var(--ink); text-align: right; }
+  details { margin-top: 14px; }
+  details summary { cursor: pointer; font: 500 11px var(--mono); letter-spacing: .1em; color: var(--dim); text-transform: uppercase; }
+  details summary:hover { color: var(--lime); }
+  .allnums { max-height: 340px; overflow: auto; margin-top: 10px; border-radius: 12px; border: 1px solid var(--stroke); }
+  .allnums div { display: flex; justify-content: space-between; gap: 16px; padding: 7px 12px; font-size: 13px; color: var(--text); border-bottom: 1px solid rgba(255,255,255,.04); }
+  .allnums div span:last-child { font-family: var(--mono); color: var(--ink); }
+  .term { border-radius: 16px; overflow: hidden; border: 1px solid var(--stroke); background: rgba(0,0,0,.55); }
+  .tbar { display: flex; gap: 7px; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--stroke); }
+  .tbar span { width: 10px; height: 10px; border-radius: 50%; background: rgba(255,255,255,.14); }
+  .tbar em { margin-left: 8px; font: 400 11px var(--mono); font-style: normal; color: var(--dim); }
+  .term pre { margin: 0; padding: 16px 18px; font: 400 14px/1.7 var(--mono); color: var(--text); overflow-x: auto; }
+  .term .hd { color: var(--dim); }
+  .type { display: inline-block; vertical-align: bottom; overflow: hidden; white-space: pre; width: 0; color: var(--lime);
+    transition: width calc(var(--n) * 30ms) steps(var(--n)) .4s; }
+  .card.in .type { width: calc(var(--n) * 1ch); }
+  .caret { display: inline-block; width: .6ch; height: 1.2em; vertical-align: text-bottom; background: var(--lime); margin-left: 2px; animation: caret 1s steps(1) infinite; }
+  @keyframes caret { 50% { opacity: 0; } }
+  .cmp { display: grid; grid-template-columns: 1fr auto 1fr; gap: 14px; align-items: center; margin-top: 16px; }
+  .cell { padding: 14px 16px; border-radius: 16px; background: rgba(255,255,255,.03); border: 1px solid var(--stroke); }
+  .cell small { display: block; font: 500 10px var(--mono); letter-spacing: .14em; color: var(--dim); text-transform: uppercase; margin-bottom: 8px; }
+  .cell b { font: 500 15px var(--mono); margin-left: 8px; }
+  .eq { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; font: 800 20px var(--head); }
+  .eq.ok { color: #0A0A0A; background: var(--lime); box-shadow: 0 0 22px rgba(215,241,59,.45); } .eq.no { color: #fff; background: var(--red); }
+  .truthline { margin-top: 12px; font-size: 15px; color: var(--text); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .foot { font: 400 12px/1.7 var(--mono); color: var(--dim); margin: 8px 4px 0; letter-spacing: .02em; }
+  .empty { color: var(--dim); padding: 80px 32px; text-align: center; font-size: 18px; }
+
+  @media (max-width: 980px) {
+    .top { flex-wrap: wrap; padding: 10px 16px; gap: 10px; }
+    .picker { order: 3; flex-basis: 100%; justify-content: flex-start; }
+    .back { margin-left: auto; }
+    .hero { padding: 28px 16px 20px; }
+    .grid { grid-template-columns: 1fr; padding: 0 16px 120px; gap: 18px; }
+    .flowcol { position: static; height: auto; min-height: 0; }
+    .flowcol.glass { -webkit-backdrop-filter: none; backdrop-filter: none; background: rgba(20,22,28,.78); }  /* a blur here would trap the fixed bar below */
+    .flowbox { flex: none; }
+    .ffoot { position: fixed; left: 12px; right: 12px; bottom: 12px; z-index: 35; padding: 12px 14px; border-radius: 18px; border: 1px solid var(--stroke);
+      background: rgba(14,16,20,.82); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); }
+    .card { padding: 20px 18px 22px; border-radius: 20px; }
+    .crow { grid-template-columns: minmax(0, 1.4fr) minmax(50px, .8fr) 48px 44px; gap: 8px; }
+    .cmp { grid-template-columns: 1fr; } .eq { margin: 0 auto; }
+  }
+  @media (max-width: 560px) { .chips .chip { padding: 6px 9px; } .picker { flex-wrap: wrap; } .picker select { order: 5; flex-basis: 100%; max-width: none; }
+    .chips { flex: 1; } .fhead .fnote { display: none; } .sent { font-size: 17px; } }
+  @media (prefers-reduced-motion: reduce) { .orb { animation: none; } }
 </style>
 </head>
 <body>
-<header>
-  <a class="back" href="console.html">← Live run</a>
-  <span class="name">Inside the machine</span>
-  <span class="note" id="hdrNote"></span>
-</header>
-<div class="picker">
-  <div class="chips" id="filters"></div>
-  <select id="pick" aria-label="Sentence"></select>
-  <div class="nav"><button id="prev" title="Previous sentence">←</button><button id="next" title="Next sentence">→</button></div>
+<canvas id="bg"></canvas><div class="orb a"></div><div class="orb b"></div><div class="orb c"></div><div class="vig"></div>
+<div class="app">
+  <header class="top">
+    <div class="brand">POLYGRAPH <b>/</b> INSIDE THE MACHINE</div>
+    <div class="picker">
+      <div class="chips" id="filters"></div>
+      <select id="pick" aria-label="Sentence"></select>
+      <button class="round" id="prev" title="Previous sentence" aria-label="Previous sentence">←</button>
+      <button class="round" id="next" title="Next sentence" aria-label="Next sentence">→</button>
+    </div>
+    <a class="back" href="console.html">Live run ↗</a>
+  </header>
+  <main id="main"><div class="empty">Loading…</div></main>
 </div>
-<div id="main"><div class="empty">Loading…</div></div>
-<div class="scrim" id="scrim"></div>
-<aside class="panel" id="panel" aria-hidden="true"></aside>
 
 <script>
 const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-const SVG = "http://www.w3.org/2000/svg";
+const SVGNS = "http://www.w3.org/2000/svg";
+const REDUCED = matchMedia("(prefers-reduced-motion: reduce)").matches;
 const STATUS = { agrees: "holds on this date", stale: "was true before this date, but not on it", premature: "only becomes true after this date",
   invented: "is never true on this timeline", unknown: "has no other evidence to compare with", none: "no fact found" };
-const SHORT = { agrees: "holds on this date", stale: "stale", premature: "premature", invented: "never true", unknown: "no other evidence", none: "no fact" };
+const SHORT = { agrees: "holds", stale: "stale", premature: "premature", invented: "never true", unknown: "no evidence", none: "no fact" };
 
-// the graph: the same data flow as polygraph/pipeline.py
-const W = 1724, H = 486, NW = 176, NH = 104, CY = 164;
+/* ---- the graph: the same data flow as polygraph/pipeline.py ------------------------------------ */
+const W = 380, H = 700, CW = 236, SW = 148, NH = 58, CX = 200;
 const ICONS = {
   input: '<path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5"/>',
   linker: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
@@ -169,22 +353,26 @@ const ICONS = {
   writer: '<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 10h16M10 10v10"/>',
 };
 const NODES = [
-  { id: "input", name: "Input", color: "#6B7280", x: 24, y: CY },
-  { id: "linker", name: "Linker", color: "#2859B5", x: 274, y: 30 },
-  { id: "reader", name: "Reader", color: "#7FA600", x: 274, y: 298 },
-  { id: "attributor", name: "Attributor", color: "#7C4DCC", x: 524, y: CY },
-  { id: "kb", name: "Knowledge base", color: "#0E8C8C", x: 774, y: CY },
-  { id: "truth", name: "Truth engine", color: "#D9822B", x: 1024, y: CY },
-  { id: "judge", name: "Judge", color: "#C8303F", x: 1274, y: CY },
-  { id: "writer", name: "Writer", color: "#1E8E4F", x: 1524, y: CY },
+  { id: "input", name: "Input", kind: "the page", color: "#A0A6B4", x: CX - CW / 2, y: 16, w: CW },
+  { id: "linker", name: "Linker", kind: "who", color: "#4F86F7", x: 46, y: 116, w: SW },
+  { id: "reader", name: "Reader", kind: "which values", color: "#D7F13B", x: 206, y: 116, w: SW },
+  { id: "attributor", name: "Attributor", kind: "which fact", color: "#A77BFF", x: CX - CW / 2, y: 216, w: CW },
+  { id: "kb", name: "Knowledge base", kind: "what is known", color: "#2CC6B8", x: CX - CW / 2, y: 316, w: CW },
+  { id: "truth", name: "Truth engine", kind: "the timeline", color: "#FFB020", x: CX - CW / 2, y: 416, w: CW },
+  { id: "judge", name: "Judge", kind: "the verdict", color: "#FF4D5E", x: CX - CW / 2, y: 516, w: CW },
+  { id: "writer", name: "Writer", kind: "output.csv", color: "#3DDC84", x: CX - CW / 2, y: 616, w: CW },
 ];
-const EDGES = [["input", "linker"], ["input", "reader"], ["linker", "attributor"], ["reader", "attributor"], ["attributor", "kb"],
-  ["kb", "truth"], ["truth", "judge"], ["input", "judge", "page"], ["judge", "writer"]];
+// [from, to, kind, label position along the wire]
+const EDGES = [["input", "linker", "", 0], ["input", "reader", "", 0], ["linker", "attributor", "", .3], ["reader", "attributor", "", .3],
+  ["attributor", "kb", "", .5], ["kb", "truth", "", .5], ["truth", "judge", "", .5], ["input", "judge", "page", .5], ["judge", "writer", "", .5]];
 const node = id => NODES.find(n => n.id === id);
-const RUN = 620, TRAVEL = 560;
+const ekey = e => `${e[0]}>${e[1]}`;
+const RUN = REDUCED ? 120 : 950;
 
-let INDEX = [], FILTER = "all", CURRENT = null, DATA = null, timers = [], OPEN = null;
+let INDEX = [], TRACE = null, FILTER = "all", CURRENT = null, DATA = null;
+let timers = [], playing = false, follow = true, RUNNING = new Set(), ACTIVE = "", DUR = {};
 
+/* ---- values as people write them -------------------------------------------------------------- */
 function val(v) {
   if (!v) return "";
   const n = x => typeof x === "number" ? x.toLocaleString("en-US") : x, cur = { EUR: "€", USD: "$", GBP: "£" };
@@ -200,22 +388,24 @@ function val(v) {
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const attr = a => a.replace(/_/g, " ");
 const plural = (n, w, ws) => `${n} ${n === 1 ? w : (ws || w + "s")}`;
+const lab = (l, big) => `<span class="lab ${l}${big ? " big" : ""}">${l}</span>`;
+const pct = x => `${Math.round(x * 100)}%`;
+const cut = (s, n) => s.length > n ? s.slice(0, n - 1) + "…" : s;
 
-/* ---- picking a sentence ------------------------------------------------------------------ */
+/* ---- picking a sentence ------------------------------------------------------------------------- */
 async function loadIndex() {
-  const j = await (await fetch("/api/trace/index")).json();
-  INDEX = j.rows.filter(r => r.traced);
-  if (!INDEX.length) { $("#main").innerHTML = '<div class="empty">No traces yet. Run the live check first (← Live run).</div>'; return; }
+  let j;
+  try { j = await (await fetch("/api/trace/index")).json(); } catch (e) { $("#main").innerHTML = '<div class="empty">The server is not answering.</div>'; return; }
+  INDEX = (j.rows || []).filter(r => r.traced); TRACE = j.trace;
+  if (!INDEX.length) { $("#main").innerHTML = '<div class="empty">No traces yet. Run the live check first: <a href="console.html">Live run ↗</a></div>'; return; }
   const hasSample = INDEX.some(r => r.sample);
-  const filters = [...(hasSample ? [["sample", "Sample"]] : []), ["false", "Called false"], ["wrong", "Wrong"], ["all", "All"]];
-  const want = new URLSearchParams(location.search).get("row");
-  const wanted = INDEX.find(r => r.id === want);
+  const filters = [...(hasSample ? [["sample", "Sample"]] : []), ["false", "False"], ["wrong", "Wrong"], ["all", "All"]];
+  const wanted = INDEX.find(r => r.id === new URLSearchParams(location.search).get("row"));
   FILTER = wanted ? (hasSample && wanted.sample ? "sample" : "all") : hasSample ? "sample" : "false";
-  $("#filters").innerHTML = filters.map(([k, n]) => `<button data-f="${k}" class="${k === FILTER ? "on" : ""}">${n}</button>`).join("");
-  $("#filters").querySelectorAll("button").forEach(b => b.onclick = () => {
-    FILTER = b.dataset.f; $("#filters").querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b));
+  $("#filters").innerHTML = filters.map(([k, n]) => `<button class="chip ${k === FILTER ? "on" : ""}" data-f="${k}">${n}</button>`).join("");
+  $$("#filters .chip").forEach(b => b.onclick = () => {
+    FILTER = b.dataset.f; $$("#filters .chip").forEach(x => x.classList.toggle("on", x === b));
     fillPick(); const first = listRows()[0]; if (first) open(first.id); });
-  if (j.trace) $("#hdrNote").textContent = `${j.trace.traced} sentences traced · ${j.trace.same_label} with the same label as the Docker run`;
   $("#pick").onchange = () => open($("#pick").value);
   $("#prev").onclick = () => step(-1); $("#next").onclick = () => step(1);
   fillPick();
@@ -227,7 +417,8 @@ function listRows() {
     || (FILTER === "wrong" && r.truth && r.truth !== r.label));
 }
 function fillPick() {
-  $("#pick").innerHTML = listRows().map(r => `<option value="${esc(r.id)}">${esc(r.label.toUpperCase())} · ${esc(r.id)} · ${esc(r.text.length > 90 ? r.text.slice(0, 88) + "…" : r.text)}</option>`).join("");
+  $("#pick").innerHTML = listRows().map(r => `<option value="${esc(r.id)}">${esc(r.label.toUpperCase())} · ${esc(r.id)} · ${esc(cut(r.text, 90))}</option>`).join("")
+    || "<option>No sentences in this filter</option>";
   if (CURRENT) $("#pick").value = CURRENT;
 }
 function step(d) {
@@ -242,45 +433,65 @@ async function open(id) {
   draw();
 }
 
-/* ---- what each node computed ------------------------------------------------------------------ */
+/* ---- what each stage computed, from the recorded trace ------------------------------------------------ */
 function highlight(text, spans, cls) {
   const ok = spans.filter(s => s.start >= 0).sort((a, b) => a.start - b.start);
-  let out = "", at = 0;
+  let out = "", at = 0, i = 0;
   for (const s of ok) {
     if (s.start < at) continue;
-    out += esc(text.slice(at, s.start)) + `<mark class="${cls}">${esc(text.slice(s.start, s.end))}</mark>`;
+    out += esc(text.slice(at, s.start)) + `<mark class="${cls}" style="--i:${i++}">${esc(text.slice(s.start, s.end))}</mark>`;
+    at = s.end;
+  }
+  return out + esc(text.slice(at));
+}
+function heroText(text, subs, vals) {
+  const spans = [...subs.filter(s => s.start >= 0).map(s => ({ ...s, k: "subj" })), ...vals.map(s => ({ ...s, k: "val" }))].sort((a, b) => a.start - b.start);
+  let out = "", at = 0;
+  for (const s of spans) {
+    if (s.start < at) continue;
+    out += esc(text.slice(at, s.start)) + `<span class="hm ${s.k}">${esc(text.slice(s.start, s.end))}</span>`;
     at = s.end;
   }
   return out + esc(text.slice(at));
 }
 
-function timeline(f, day) {
-  const W = 900, H = 230, L = 130, R = 20, T = 18, B = 34;
+function timeline(f, day, k) {
+  const W = 900, H = 250, L = 150, R = 26, T = 26, B = 38;
   const t0 = Date.parse("2025-10-01"), t1 = Date.parse("2026-11-01");
   const X = d => L + (W - L - R) * (Date.parse(d.length === 7 ? d + "-15" : d.length === 4 ? d + "-07-01" : d) - t0) / (t1 - t0);
   const vals = [];  // one lane per distinct value
   [...f.steps.map(s => s.value), ...f.mentions.map(m => m.value), f.value].forEach(v => { if (!vals.includes(val(v))) vals.push(val(v)); });
-  const Y = v => T + (H - T - B) * (vals.length === 1 ? 0.5 : vals.indexOf(val(v)) / (vals.length - 1));
-  let s = `<svg viewBox="0 0 ${W} ${H}">`;
+  const lane = i => T + (H - T - B) * (vals.length === 1 ? 0.5 : i / (vals.length - 1));
+  const Y = v => lane(vals.indexOf(val(v)));
+  let s = `<svg class="tl" viewBox="0 0 ${W} ${H}" role="img" aria-label="Timeline of ${esc(f.subject)} ${esc(attr(f.attribute))}">
+    <defs><filter id="tg${k}" filterUnits="userSpaceOnUse" x="0" y="0" width="${W}" height="${H}"><feGaussianBlur stdDeviation="4" result="b"/>
+    <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>`;
   for (let m = 0; m <= 13; m++) {
     const d = new Date(Date.UTC(2025, 9 + m, 1)), x = X(d.toISOString().slice(0, 10));
-    s += `<line x1="${x}" y1="${T - 8}" x2="${x}" y2="${H - B + 4}" stroke="#EEEEE8"/>`;
-    if (m % 2 === 0) s += `<text x="${x}" y="${H - 12}" fill="#8A8F99" font-size="12" text-anchor="middle">${d.toLocaleString("en", { month: "short", timeZone: "UTC" })} ${String(d.getUTCFullYear()).slice(2)}</text>`;
+    s += `<line x1="${x}" y1="${T - 12}" x2="${x}" y2="${H - B + 6}" stroke="rgba(255,255,255,.05)"/>`;
+    if (m % 2 === 0) s += `<text x="${x}" y="${H - 13}" fill="#6B7180" font-size="12" font-family="JetBrains Mono, monospace" text-anchor="middle">${d.toLocaleString("en", { month: "short", timeZone: "UTC" })} ${String(d.getUTCFullYear()).slice(2)}</text>`;
   }
-  vals.forEach((v, i) => s += `<text x="${L - 10}" y="${T + (H - T - B) * (vals.length === 1 ? 0.5 : i / (vals.length - 1)) + 4}" fill="#5C6170" font-size="13" text-anchor="end">${esc(v.slice(0, 18))}</text>`);
-  f.steps.forEach((st, i) => {   // the staircase the truth engine fitted
-    const x0 = X(st.from), nx = f.steps[i + 1], x1 = nx ? X(nx.from) : X(st.to) + 6, y = Y(st.value);
-    s += `<line x1="${x0}" y1="${y}" x2="${x1}" y2="${y}" stroke="#9BC400" stroke-width="5" stroke-linecap="round" opacity=".75"/>`;
-    if (nx) s += `<line x1="${x1}" y1="${y}" x2="${x1}" y2="${Y(nx.value)}" stroke="#9BC400" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>`;
+  vals.forEach((v, i) => s += `<line x1="${L}" y1="${lane(i)}" x2="${W - R}" y2="${lane(i)}" stroke="rgba(255,255,255,.035)"/>
+    <text x="${L - 14}" y="${lane(i) + 4}" fill="#A8AEBB" font-size="13" font-family="Figtree, sans-serif" text-anchor="end">${esc(cut(v, 20))}</text>`);
+  if (f.steps.length) {   // the staircase the truth engine fitted
+    let d = "";
+    f.steps.forEach((st, i) => {
+      const nx = f.steps[i + 1], x0 = X(st.from), x1 = nx ? X(nx.from) : X(st.to) + 6, y = Y(st.value);
+      d += i ? ` V${y} H${x1}` : `M${x0},${y} H${x1}`;
+    });
+    s += `<path d="${d}" fill="none" stroke="rgba(215,241,59,.16)" stroke-width="10" stroke-linejoin="round"/>
+      <path class="draw" pathLength="1" d="${d}" fill="none" stroke="#D7F13B" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" filter="url(#tg${k})"/>`;
+  }
+  [...f.mentions].filter(m => !m.this).sort((a, b) => a.date < b.date ? -1 : 1).forEach((m, i) => {
+    const c = m.anchor >= 1 ? "#3DDC84" : m.anchor <= -1 ? "#FF4D5E" : "#C9CED8";
+    const r = m.anchor ? 5.5 : 3 + Math.min(3, m.weight * 3), o = Math.abs(m.anchor) >= 1 ? .95 : .5;
+    s += `<circle class="pop" style="--d:${Math.min(1400, 500 + i * 22)}ms" cx="${X(m.date)}" cy="${Y(m.value)}" r="${r}" fill="${c}" fill-opacity="${o}"/>`;
   });
-  f.mentions.forEach(m => {
-    if (m.this) return;
-    const c = m.anchor >= 1 ? "#1E8E4F" : m.anchor <= -1 ? "#C8303F" : "#9AA0AB";
-    const r = m.anchor ? 5.5 : 3 + Math.min(3, m.weight * 3);
-    s += `<circle cx="${X(m.date)}" cy="${Y(m.value)}" r="${r}" fill="${c}" fill-opacity="${Math.abs(m.anchor) >= 1 ? 0.9 : 0.55}"/>`;
-  });
-  s += `<line x1="${X(day)}" y1="${T - 8}" x2="${X(day)}" y2="${H - B + 4}" stroke="#2859B5" stroke-dasharray="3 4"/>
-        <circle cx="${X(day)}" cy="${Y(f.value)}" r="9" fill="none" stroke="#2859B5" stroke-width="3"/>`;
+  const dx = X(day), dy = Y(f.value);
+  s += `<line x1="${dx}" y1="${T - 12}" x2="${dx}" y2="${H - B + 6}" stroke="#4F86F7" stroke-dasharray="3 5" opacity=".8"/>
+    <text x="${dx + 6}" y="${T - 2}" fill="#8FB4FF" font-size="11" font-family="JetBrains Mono, monospace">${esc(day)}</text>
+    <circle class="ring" cx="${dx}" cy="${dy}" r="10" fill="none" stroke="#4F86F7" stroke-width="2"/>
+    <circle cx="${dx}" cy="${dy}" r="10" fill="rgba(79,134,247,.18)" stroke="#4F86F7" stroke-width="3"/>`;
   return s + "</svg>";
 }
 
@@ -289,77 +500,90 @@ function build(t, docker, names) {
   const features = t.features || [], pagef = t.page_features || [];
   const linker = t.linker || [], linkerIn = linker.filter(m => m.in_sentence), linkerPage = linker.filter(m => !m.in_sentence);
   const rd = t.reader || [], facts = (t.truth && t.truth.facts) || [], rec = t.reconcile || [];
+  const pinfo = (t.truth && t.truth.page) || {};
   const match = docker && docker.label === v.label;
   const evid = n => { const f = features.find(x => x.name === n); return f ? f.value : null; };
   const unlog = x => x == null ? "–" : Math.round(Math.exp(x) - 1);
-  const pf = judge.p_false_given_decided, worst = t.truth ? t.truth.worst : "none";
-  const pageSize = (t.truth && t.truth.page && t.truth.page.size) || (t.page || []).length;
+  const pf = judge.p_false_given_decided ?? 0, worst = t.truth ? t.truth.worst : "none";
+  const pageSize = pinfo.size || (t.page || []).length;
   const real = att ? att.values.filter(a => a.kind !== "boolean" || a.candidates.some(c => c.probability >= 0.01)) : [];
   const quietYesNo = att ? att.values.find(a => a.kind === "boolean" && !real.includes(a)) : null;
   const chosen = att ? att.chosen : [];
   const cls = judge.classes || [], probs = judge.probabilities || [];
-  const conf = v.confidence ? ` ${Math.round(v.confidence * 100)}%` : "";
-  const D = { row, v, docker, match, summary: {}, panel: {}, what: {}, edge: {} };
+  const confNum = v.confidence != null ? v.csv.split(",").pop() : "";
+  const D = { row, v, docker, match, linkerIn, rd, short: {}, what: {}, body: {}, edge: {} };
 
-  // Input
-  D.summary.input = `<b>${esc(row.id)}</b>, ${esc(row.date)}<br>page of ${plural(pageSize, "sentence")}`;
+  // what travels along each wire
+  D.edge = {
+    "input>linker": "1 sentence", "input>reader": "1 sentence",
+    "linker>attributor": plural(linker.length, "subject"), "reader>attributor": plural(rd.length, "value"),
+    "attributor>kb": plural(att ? chosen.length : facts.length, "fact"), "kb>truth": plural(facts.length, "fact"),
+    "truth>judge": `${features.length} numbers`, "input>judge": `the page · ${pagef.length || 3} numbers`,
+    "judge>writer": `${v.label}${confNum ? " " + confNum : ""}`,
+  };
+
+  // 01 Input
+  D.short.input = `${row.id} · ${row.date}`;
   D.what.input = "The sentence and the page it was published on. Sentences on one page are judged together: lies cluster.";
-  D.panel.input = `<table><thead><tr><th>On the same page</th><th>Label in the input</th></tr></thead><tbody>
-    ${(t.page || []).map(p => `<tr class="${p.self ? "self" : ""}"><td>${esc(p.text)}</td><td>${p.self ? "<b>this sentence</b>" : p.label ? `<span class="pill ${p.label}">${p.label}</span>` : '<span class="sub">to be labelled</span>'}</td></tr>`).join("")}
-    </tbody></table>`;
-  // Linker
-  D.summary.linker = linkerIn.length ? `<b>${linkerIn.map(m => esc(m.subject)).join(", ")}</b>` + (linkerPage.length ? ` + ${linkerPage.length} on the page` : "")
-    : linkerPage.length ? `None in the sentence; <b>${plural(linkerPage.length, "subject")}</b> on the page` : "No subject found";
+  D.body.input = `<div class="pagelist">${(t.page || []).map((p, i) => `<div class="pl rise ${p.self ? "self" : ""}" style="--i:${i}">
+      <span>${esc(p.text)}</span>${p.self ? "<em>THIS SENTENCE</em>" : p.label ? lab(p.label) : "<em>TO LABEL</em>"}</div>`).join("")}</div>
+    <div class="stats">
+      <div class="stat rise" style="--i:4"><b>${pageSize}</b><small>sentences on the page</small></div>
+      ${pinfo.trust_loo != null ? `<div class="stat rise" style="--i:5"><b>${(+pinfo.trust_loo).toFixed(2)}</b><small>trust of the rest of the page</small></div>` : ""}
+      ${pinfo.true_labels != null ? `<div class="stat rise" style="--i:6"><b>${pinfo.true_labels} · ${pinfo.false_labels} · ${pinfo.unsure_labels}</b><small>labelled true · false · unsure</small></div>` : ""}
+    </div>`;
+  // 02 Linker
+  D.short.linker = linkerIn.length ? cut(linkerIn[0].subject, 18) + (linkerIn.length > 1 ? ` +${linkerIn.length - 1}` : "") : linkerPage.length ? `${linkerPage.length} on page` : "none";
   D.what.linker = "Finds who the sentence is about, from Hooly's own list of names (the lexicon). Subjects named elsewhere on the page are candidates too.";
-  D.panel.linker = `<div class="hl">${highlight(row.text, linkerIn, "subj")}</div>
-    <div class="box">${linkerIn.length ? `Named in the sentence: ${linkerIn.map(m => `<b>${esc(m.subject)}</b>`).join(", ")}` : "No subject named in the sentence itself."}
-    ${linkerPage.length ? `<br><span class="sub">Named elsewhere on the page: ${linkerPage.map(m => `${esc(m.subject)} (${plural(m.row_gap, "sentence")} away)`).join(", ")}</span>` : ""}</div>`;
-  // Reader
-  D.summary.reader = rd.length ? rd.map(r => `<b>${esc(val(r.value))}</b>${r.negated ? " (negated)" : ""}`).join(", ") : "No number, date or price";
+  D.body.linker = `<div class="sent">${highlight(row.text, linkerIn, "subj")}</div>
+    ${linkerIn.length ? `<div class="tokens">${linkerIn.map((m, i) => `<span class="tok rise" style="--i:${i + 2}">${esc(m.subject)}<small>“${esc(m.written)}”</small></span>`).join("")}</div>`
+      : '<div class="note">No subject is named in the sentence itself.</div>'}
+    ${linkerPage.length ? `<div class="note">Named elsewhere on the page: ${linkerPage.map(m => `<b style="color:var(--text)">${esc(m.subject)}</b> (${plural(m.row_gap, "sentence")} away)`).join(", ")}</div>` : ""}`;
+  // 03 Reader
+  D.short.reader = rd.length ? cut(val(rd[0].value), 18) + (rd.length > 1 ? ` +${rd.length - 1}` : "") : "no values";
   D.what.reader = "Reads every value exactly as the organisers' published rules do: money, counts, dates, versions, durations, percentages.";
-  D.panel.reader = `<div class="hl">${highlight(row.text, rd, "val")}</div>
-    ${rd.length ? `<table style="margin-top:12px"><thead><tr><th>Written</th><th>Read as</th><th>Kind</th></tr></thead><tbody>
-      ${rd.map(r => `<tr><td>“${esc(r.text)}”</td><td><b>${esc(val(r.value))}</b>${r.negated ? ' <span class="pill false">negated: ignored</span>' : ""}
-        ${r.alts && r.alts.length ? `<br><span class="sub">also possible: ${r.alts.map(a => esc(val(a))).join(", ")}</span>` : ""}</td><td>${esc(r.value.kind)}</td></tr>`).join("")}
-      </tbody></table>` : '<div class="box">No number, date or price in this sentence. Yes/no facts and names are found by the next node.</div>'}`;
-  // Attributor
-  D.summary.attributor = !att ? "Facts from the practice data" : chosen.length
-    ? chosen.map(c => `<b>${esc(c.subject)} · ${esc(attr(c.attribute))}</b>`).join("; ") + ` (score ${chosen[0].score.toFixed(2)})`
-    : `Nothing scored above ${att.threshold}`;
+  D.body.reader = `<div class="sent">${highlight(row.text, rd, "val")}</div>
+    ${rd.length ? `<div class="parse">${rd.map((r, i) => `<div class="pr rise" style="--i:${i + 2}"><span class="w">“${esc(r.text)}”</span><span class="arr">→</span>
+      <span class="r"><b>${esc(val(r.value))}</b>${r.negated ? '<span class="neg">NEGATED · IGNORED</span>' : ""}<code>${esc(JSON.stringify(r.value))}</code>
+      ${r.alts && r.alts.length ? `<code>also possible: ${r.alts.map(a => esc(val(a))).join(", ")}</code>` : ""}</span></div>`).join("")}</div>`
+      : '<div class="note">No number, date or price in this sentence. Yes/no facts and names are found by the next stage.</div>'}`;
+  // 04 Attributor
+  D.short.attributor = !att ? "from the practice data" : chosen.length ? cut(`${attr(chosen[0].attribute)} · ${chosen[0].score.toFixed(2)}`, 26) : "no fact above threshold";
   D.what.attributor = `A model trained on 2,400 labelled facts gives every (subject, attribute) a value could belong to a probability.
-    The score that decides is that probability tempered by close rivals (four equal rivals halve it). The best score is kept if it is above ${att ? att.threshold : "the threshold"}; on an exact tie the first one listed wins, and the knowledge base can still correct it.`;
-  D.panel.attributor = att ? real.map(a => `<div class="box"><b>“${esc(a.text)}”</b> <span class="sub">· ${a.considered} candidate facts scored</span>
-      <table style="margin-top:8px"><thead><tr><th>Candidate fact</th><th>Probability</th><th></th><th style="text-align:right">Score</th></tr></thead><tbody>${a.candidates.map(c => {
+    The score that decides is that probability tempered by close rivals (four equal rivals halve it). The best score is kept if it is above ${att ? att.threshold : "the threshold"};
+    on an exact tie the first one listed wins, and the knowledge base can still correct it.`;
+  D.body.attributor = att ? real.map(a => `<div class="cands"><h4>“${esc(a.text)}”<small>${a.considered} candidate facts scored</small></h4>
+      <div class="crow head"><span>Candidate fact</span><span>Probability</span><span style="text-align:right">p</span><span style="text-align:right">Score</span></div>
+      ${a.candidates.map((c, i) => {
         const won = chosen.some(ch => ch.subject === c.subject && ch.attribute === c.attribute && same(ch.value, c.value));
-        return `<tr><td style="width:46%">${won ? '<span class="chosen">✓ </span>' : ""}${esc(c.subject)} · ${esc(attr(c.attribute))}
-          ${c.value.kind === "boolean" ? ` = ${val(c.value)}` : ""}</td>
-          <td><div class="bar ${won ? "win" : ""}"><i style="width:${Math.max(1, c.probability * 100)}%"></i></div></td>
-          <td style="width:64px;text-align:right">${(c.probability * 100).toFixed(1)}%</td>
-          <td style="width:60px;text-align:right">${c.score.toFixed(3)}</td></tr>`; }).join("")}</tbody></table></div>`).join("")
-      + (quietYesNo ? `<div class="box sub">Read as a yes/no statement: ${quietYesNo.considered} yes/no facts checked, none above 1%.</div>` : "")
-      : '<div class="box">This sentence is labelled in the input, so its facts come straight from the practice data.</div>';
-  // Knowledge base
-  D.summary.kb = rec.length ? `<b>${plural(rec.length, "correction")}</b> · ${plural(facts.length, "fact")} kept` : `No correction · ${plural(facts.length, "fact")} kept`;
+        return `<div class="crow ${won ? "win" : ""}"><span class="nmc" title="${esc(c.subject)} · ${esc(attr(c.attribute))}">${won ? '<span class="chosen">✓ </span>' : ""}${esc(c.subject)} · ${esc(attr(c.attribute))}${c.value.kind === "boolean" ? ` = ${val(c.value)}` : ""}</span>
+          <div class="bar"><i style="--w:${Math.max(1.5, c.probability * 100)}%;--i:${i}"></i></div>
+          <span class="p">${(c.probability * 100).toFixed(1)}%</span><span class="s">${c.score.toFixed(3)}</span></div>`; }).join("")}
+    </div>`).join("") + (quietYesNo ? `<div class="note">Read as a yes/no statement: ${quietYesNo.considered} yes/no facts checked, none above 1%.</div>` : "")
+    : '<div class="note">This sentence is labelled in the input, so its facts come straight from the practice data.</div>';
+  // 05 Knowledge base
+  D.short.kb = rec.length ? `${plural(rec.length, "correction")}` : `no change · ${plural(facts.length, "fact")}`;
   D.what.kb = "Checks the attributor against what is already known. A value that matches exactly what one fact of a subject on the page holds on this date is almost surely that fact, so the knowledge base takes the match. Lies never match, so this only rescues true sentences from an extraction slip.";
-  D.panel.kb = (rec.length ? `<div class="box warn"><b>Corrected.</b> ${rec.map(n => n.was
+  D.body.kb = (rec.length ? `<div class="callout warn rise"><i>!</i><div><b>Corrected.</b> ${rec.map(n => n.was
       ? `${esc(n.was.subject)} · ${esc(attr(n.was.attribute))} → <b>${esc(n.now.subject)} · ${esc(attr(n.now.attribute))}</b>`
-      : `added <b>${esc(n.now.subject)} · ${esc(attr(n.now.attribute))} = ${esc(val(n.now.value))}</b>`).join("; ")}:
-      the value matches exactly what that fact holds on this date.</div>` : '<div class="box">No exact match that disagrees with the attributor, so its choice stands.</div>')
-    + `<div class="box"><b>Facts sent on:</b> ${facts.length ? facts.map(f => `${esc(f.subject)} · ${esc(attr(f.attribute))} = <b>${esc(val(f.value))}</b>`).join("; ") : "none"}</div>`;
-  // Truth engine
+      : `added <b>${esc(n.now.subject)} · ${esc(attr(n.now.attribute))} = ${esc(val(n.now.value))}</b>`).join("; ")}: the value matches exactly what that fact holds on this date.</div></div>`
+      : `<div class="callout rise"><i>✓</i><div>No exact match disagrees with the attributor, so its choice stands.</div></div>`)
+    + `<div class="cap">Facts sent to the truth engine</div><div class="fchips">${facts.length
+      ? facts.map((f, i) => `<span class="fchip rise" style="--i:${i + 1}">${esc(f.subject)} · ${esc(attr(f.attribute))} = <b>${esc(val(f.value))}</b></span>`).join("")
+      : '<span class="note">None: this sentence states no fact the engine could find.</span>'}</div>`;
+  // 06 Truth engine
   const bad = facts.find(f => f.status === worst) || facts[0];
-  D.summary.truth = bad ? `<b>${esc(val(bad.value))}</b> ${esc(SHORT[bad.status] || bad.status)}` + (bad.held_on_date && !same(bad.held_on_date, bad.value) ? ` · timeline: <b>${esc(val(bad.held_on_date))}</b>` : "")
-    : "No fact to place on a timeline";
+  D.short.truth = bad ? `${cut(val(bad.value), 14)} · ${SHORT[bad.status] || bad.status}` : "no fact";
   D.what.truth = "Every other sentence that mentions the same fact lands on its timeline. The engine fits the most likely staircase: a lone wrong value is outvoted, and a real change repeated by later pages becomes a new step. Pages earn trust as it goes.";
-  D.panel.truth = facts.length ? facts.map(f => `<div class="fact"><h3>${esc(f.subject)} · ${esc(attr(f.attribute))}</h3>
-      <div class="chart">${timeline(f, row.date)}</div>
+  D.body.truth = facts.length ? facts.map((f, k) => `<div class="fact"><h4>${esc(f.subject)} · ${esc(attr(f.attribute))}<span class="stt ${f.status}">${esc(SHORT[f.status] || f.status)}</span></h4>
+      ${timeline(f, row.date, k)}
       <div class="legend"><span class="st">fitted timeline</span><span class="t">labelled true</span><span class="f">labelled false</span><span class="u">other sentences (size = trust)</span><span class="s">this sentence</span></div>
-      <div class="box">This sentence says <b>${esc(val(f.value))}</b> on ${esc(row.date)}${f.held_on_date ? `; the timeline holds <b>${esc(val(f.held_on_date))}</b> on that date` : ""}.
+      <div class="says">This sentence says <b>${esc(val(f.value))}</b> on ${esc(row.date)}${f.held_on_date ? `; the timeline holds <b>${esc(val(f.held_on_date))}</b> on that date` : ""}.
         The value <b>${STATUS[f.status] || f.status}</b>. <span class="sub">${plural(f.mention_count, "mention")} of this fact · this page's trust ${f.page_trust}</span></div></div>`).join("")
-    : '<div class="box">No fact to place on a timeline: the judge decides from the page and the wording alone.</div>';
-  // Judge
-  D.summary.judge = v.label === "unsure" ? `Most likely <b>unsure</b>` : `P(false) <b>${Math.round(pf * 100)}%</b> ${pf > judge.cutoff ? ">" : "≤"} ${judge.cutoff * 100}% → <b>${v.label}</b>`;
-  D.what.judge = `A forest of decision trees, trained on the labelled rows, reads ${names.length} numbers about this sentence. These matter most:`;
+    : '<div class="note">No fact to place on a timeline: the judge decides from the page and the wording alone.</div>';
+  // 07 Judge
+  D.short.judge = v.label === "unsure" ? "most likely unsure" : `P(false) ${pct(pf)} → ${v.label}`;
+  D.what.judge = `A forest of decision trees, trained on the labelled rows, reads ${names.length} numbers about this sentence and weighs them.`;
   const lines = [
     ["Worst fact's status", STATUS[worst] || "–"],
     ["Other mentions of that fact", unlog(evid("other mentions of the worst fact (log)"))],
@@ -371,170 +595,289 @@ function build(t, docker, names) {
     ["Trust of the rest of the page", evid("trust of the rest of the page")],
     ["Hedging words (\"I have been told\")", evid("hedging words (\"I have been told\")") ? "yes" : "no"],
     ["Speaker is Gavin", evid("the speaker is Gavin") ? "yes" : "no"],
-    ["Other sentences on this page the first pass called false", !pagef.length ? "–" : pagef[1] < 0 ? "no other sentences"
-      : `${pagef[2]} (highest P(false) ${Math.round(pagef[1] * 100)}%)`],
+    ["Other sentences on this page the first pass called false", !pagef.length ? "–" : pagef[1] < 0 ? "no other sentences" : `${pagef[2]} (highest P(false) ${pct(pagef[1])})`],
   ];
-  D.panel.judge = `<div class="evidence">${lines.map(([a, b]) => `<span>${esc(a)}</span><span>${esc(b ?? "–")}</span>`).join("")}</div>
-    <h3 style="margin:18px 0 6px;font-size:16px">What the trees say</h3>
-    <div class="probs">${["true", "false", "unsure"].map(c => { const i = cls.indexOf(c), p = i >= 0 ? probs[i] : 0;
-      return `<div><span class="pill ${c}">${c}</span><div class="bar"><i style="width:${p * 100}%;background:var(--${c === "true" ? "green" : c === "false" ? "red" : "amber"})"></i></div><span>${(p * 100).toFixed(1)}%</span></div>`; }).join("")}</div>
-    <div class="rule">${v.label === "unsure" ? `<b>unsure</b> is the most likely class, so the answer is <span class="pill unsure">unsure</span>`
-      : `P(false), among true or false = <b>${(pf * 100).toFixed(1)}%</b> ${pf > judge.cutoff ? ">" : "≤"} ${judge.cutoff * 100}% → <span class="pill ${v.label}">${v.label}</span>, ${Math.round(v.confidence * 100)}% sure`}</div>
-    <div class="sub">${esc(v.why)}${judge.self_training ? ` · Self-training: in the first pass this sentence scored P(false) ${(judge.first_pass_p_false * 100).toFixed(0)}%; other sentences' confident verdicts were then added to the timelines as weak evidence, and everything was judged again.` : ""}</div>
-    <details><summary>All ${names.length} numbers the trees read</summary><table style="margin-top:8px"><tbody>
-      ${[...features, ...pagef.map((x, i) => ({ name: names[features.length + i], value: x }))].map(f => `<tr><td>${esc(f.name)}</td><td style="text-align:right">${esc(f.value)}</td></tr>`).join("")}
-    </tbody></table></details>`;
-  // Writer
-  D.summary.writer = `<b>${v.label}${v.confidence != null ? ", " + v.csv.split(",").pop() : ""}</b> to output.csv` + (docker ? `<br>Docker wrote <b>${docker.label}</b> ${match ? "✓" : "✗"}` : "");
+  D.body.judge = `<div class="meter" style="--p:${pf};--cut:${judge.cutoff ?? .6}">
+      <div class="track"><span class="cut" data-l="${Math.round((judge.cutoff ?? .6) * 100)}% cutoff"></span><span class="needle"></span></div>
+      <div class="ends"><span>← true</span><span>P(false) among true or false</span><span>false →</span></div></div>
+    <div class="rule">${v.label === "unsure" ? `<b>unsure</b> is the most likely class, so the answer is ${lab("unsure")}`
+      : `P(false) = <b>${(pf * 100).toFixed(1)}%</b> ${pf > (judge.cutoff ?? .6) ? ">" : "≤"} ${Math.round((judge.cutoff ?? .6) * 100)}% → ${lab(v.label, 1)} &nbsp;${pct(v.confidence)} sure`}</div>
+    <div class="cap">What the trees say</div>
+    <div class="probs">${["true", "false", "unsure"].map((c, i) => { const j = cls.indexOf(c), p = j >= 0 ? probs[j] : 0;
+      return `<div>${lab(c)}<div class="bar"><i style="--w:${p * 100}%;--i:${i + 4};background:var(--${c === "true" ? "green" : c === "false" ? "red" : "amber"})"></i></div><span>${(p * 100).toFixed(1)}%</span></div>`; }).join("")}</div>
+    <div class="cap">The evidence that matters most</div>
+    <div class="evidence">${lines.map(([a, b]) => `<span>${esc(a)}</span><span>${esc(b ?? "–")}</span>`).join("")}</div>
+    <div class="note">${esc(v.why)}${judge.self_training ? ` · Self-training: in the first pass this sentence scored P(false) ${pct(judge.first_pass_p_false)}; other sentences' confident verdicts were then added to the timelines as weak evidence, and everything was judged again.` : ""}</div>
+    <details><summary>All ${names.length} numbers the trees read</summary><div class="allnums">
+      ${[...features, ...pagef.map((x, i) => ({ name: names[features.length + i], value: x }))].map(f => `<div><span>${esc(f.name)}</span><span>${esc(f.value)}</span></div>`).join("")}
+    </div></details>`;
+  // 08 Writer
+  D.short.writer = `${v.label}${confNum ? " " + confNum : ""}${docker ? (match ? " · docker ✓" : " · docker ✗") : ""}`;
   D.what.writer = "The row this sentence gets in output.csv: id, four empty claim columns, the label and the confidence.";
-  D.panel.writer = `<pre class="csv">id,type,text,form,label,confidence\n${esc(v.csv)}</pre>
-    ${docker ? `<div class="box">The Docker container wrote: <span class="pill ${docker.label}">${docker.label}</span>${docker.confidence ? ` ${Math.round(docker.confidence * 100)}%` : ""}
-      ${match ? ' <span class="chosen">✓ same as this trace</span>' : ' <span style="color:var(--red);font-weight:700">differs from this trace</span>'}
-      ${docker.truth ? ` · hidden practice label: <span class="pill ${docker.truth}">${docker.truth}</span> ${docker.truth === docker.label ? '<span class="chosen">✓ correct</span>' : '<span style="color:var(--red);font-weight:700">✗ wrong</span>'}` : ""}</div>` : ""}`;
-
-  // what travels along each edge
-  D.edge = {
-    "input>linker": "1 sentence", "input>reader": "1 sentence",
-    "linker>attributor": plural(linker.length, "subject"), "reader>attributor": plural(rd.length, "value"),
-    "attributor>kb": plural(att ? chosen.length : facts.length, "fact"), "kb>truth": plural(facts.length, "fact"),
-    "truth>judge": `${features.length} numbers`, "input>judge": `the page: ${pagef.length || 3} numbers`,
-    "judge>writer": `${v.label}${conf}`,
-  };
+  D.body.writer = `<div class="term"><div class="tbar"><span></span><span></span><span></span><em>/output/output.csv</em></div>
+      <pre><span class="hd">id,type,text,form,label,confidence</span>\n<span class="type" style="--n:${v.csv.length}">${esc(v.csv)}</span><span class="caret"></span></pre></div>
+    ${docker ? `<div class="cmp"><div class="cell rise" style="--i:8"><small>This trace (in-process)</small>${lab(v.label)}<b>${confNum}</b></div>
+      <div class="eq ${match ? "ok" : "no"} rise" style="--i:9">${match ? "=" : "≠"}</div>
+      <div class="cell rise" style="--i:10"><small>The Docker container</small>${lab(docker.label)}<b>${docker.confidence != null ? Number(docker.confidence).toFixed(3) : ""}</b></div></div>
+      ${docker.truth ? `<div class="truthline rise" style="--i:11">Hidden practice label ${lab(docker.truth)} ${docker.truth === docker.label ? '<span class="ok">✓ correct</span>' : '<span class="no">✗ wrong</span>'}</div>` : ""}` : ""}`;
+  // what each card received and sent
+  D.io = {};
+  for (const n of NODES) {
+    const ins = EDGES.filter(e => e[1] === n.id).map(e => `<span>IN · <b>${esc(D.edge[ekey(e)])}</b> from ${node(e[0]).name}</span>`);
+    const outs = EDGES.filter(e => e[0] === n.id).map(e => `<span>OUT · <b>${esc(D.edge[ekey(e)])}</b> to ${node(e[1]).name}</span>`);
+    if (n.id === "input") ins.push(`<span>IN · <b>row ${esc(row.id)}</b> of universe.csv</span>`);
+    if (n.id === "writer") outs.push(`<span>OUT · <b>1 line</b> to output.csv</span>`);
+    D.io[n.id] = ins.join("") + outs.join("");
+  }
   return D;
 }
 
-/* ---- the canvas ------------------------------------------------------------------------------- */
-function edgePath(a, b, kind) {
-  const x1 = a.x + NW, y1 = a.y + NH / 2, x2 = b.x, y2 = b.y + NH / 2;
-  if (kind === "page") {  // runs under the graph, from the page straight to the judge
-    const yb = H - 24;
-    return `M${x1},${y1} C${x1 + 44},${y1} ${x1 + 30},${yb} ${x1 + 92},${yb} L${x2 - 92},${yb} C${x2 - 30},${yb} ${x2 - 44},${y2} ${x2},${y2}`;
+/* ---- drawing the page ------------------------------------------------------------------------------ */
+function wirePath(a, b, kind) {
+  if (kind === "page") {  // runs down the left side, from the page straight to the judge
+    const x1 = a.x, y1 = a.y + NH / 2, x2 = b.x, y2 = b.y + NH / 2, xl = 22;
+    return `M${x1},${y1} C${x1 - 40},${y1} ${xl},${y1 + 4} ${xl},${y1 + 40} L${xl},${y2 - 40} C${xl},${y2 - 4} ${x2 - 40},${y2} ${x2},${y2}`;
   }
-  const dx = Math.max(40, (x2 - x1) / 2);
-  return `M${x1},${y1} C${x1 + dx},${y1} ${x2 - dx},${y2} ${x2},${y2}`;
+  const x1 = a.x + a.w / 2, y1 = a.y + NH, x2 = b.x + b.w / 2, y2 = b.y, dy = Math.max(18, (y2 - y1) / 2);
+  return `M${x1},${y1} C${x1},${y1 + dy} ${x2},${y2 - dy} ${x2},${y2}`;
+}
+
+function card(id) {
+  const n = node(id), i = NODES.indexOf(n), D = DATA;
+  return `<article class="card glass" id="c-${id}" data-id="${id}" style="--c:${n.color}"><div class="scan"></div>
+    <div class="ch"><span class="ic"><svg viewBox="0 0 24 24">${ICONS[id]}</svg></span>
+      <div><div class="num">${String(i + 1).padStart(2, "0")} · ${n.kind}</div><h3>${n.name}</h3></div><span class="state">waiting</span></div>
+    <p class="what">${D.what[id]}</p><div class="io">${D.io[id]}</div>
+    <div class="body">${D.body[id]}</div></article>`;
 }
 
 function draw() {
   const D = DATA, v = D.v;
-  closePanel();
+  stop();
+  document.body.dataset.verdict = "";
+  const dconf = D.docker && D.docker.confidence != null ? " " + Number(D.docker.confidence).toFixed(3) : "";
   $("#main").innerHTML = `
-    <div class="head">
-      <div class="sub">${esc(D.row.id)} · page dated ${esc(D.row.date)}</div>
-      <div class="sentence">${esc(D.row.text)}</div>
-      <div class="verdict">Verdict: <span class="pill ${v.label}">${v.label}</span>${v.confidence ? ` ${Math.round(v.confidence * 100)}% sure` : ""}
-        ${D.docker ? `· Docker run: <span class="pill ${D.docker.label}">${D.docker.label}</span> ${D.match ? '<span class="ok">✓ same</span>' : '<span class="no">differs</span>'}` : ""}
-        ${D.docker && D.docker.truth ? `· hidden label: <span class="pill ${D.docker.truth}">${D.docker.truth}</span>` : ""}
-        <span class="actions"><button id="replay">▶ Run again</button><button id="skip">Skip to the end</button></span></div>
-    </div>
-    <div class="wrap" id="wrap"><div class="sizer" id="sizer"><div class="canvas" id="canvas" style="width:${W}px;height:${H}px">
-      <svg class="edges" id="edges" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}"></svg>
-      ${NODES.map(n => `<div class="node" id="n-${n.id}" style="left:${n.x}px;top:${n.y}px;width:${NW}px;height:${NH}px" tabindex="0" role="button" aria-label="${n.name}">
-        <div class="ic" style="background:${n.color}"><svg viewBox="0 0 24 24">${ICONS[n.id]}</svg></div>
-        <div style="min-width:0"><div class="t">${n.name}</div><div class="s">${D.summary[n.id]}</div></div>
-        <span class="badge"></span>${n.id !== "input" ? '<i class="port in"></i>' : ""}${n.id !== "writer" ? '<i class="port out"></i>' : ""}</div>`).join("")}
-    </div></div></div>
-    <div class="hint">Every box is a stage of the real pipeline, with what it computed for this sentence. Click one to open it.</div>`;
-  const svg = $("#edges");
-  for (const [a, b, kind] of EDGES) {
-    const g = document.createElementNS(SVG, "g"), d = edgePath(node(a), node(b), kind);
+    <section class="hero" id="hero">
+      <div class="kicker">Sentence ${esc(D.row.id)} · page dated ${esc(D.row.date)}</div>
+      <div class="sentence">${heroText(D.row.text, D.linkerIn, D.rd)}</div>
+      <div class="vrow">
+        <span class="tag glass pend" id="tVerdict"><small>Verdict</small>${lab(v.label, 1)}${v.confidence != null ? ` ${pct(v.confidence)} sure` : ""}</span>
+        ${D.docker ? `<span class="tag glass pend" id="tDocker"><small>Docker container</small>${lab(D.docker.label)}${dconf} ${D.match ? '<span class="ok">✓ same</span>' : '<span class="no">≠ differs</span>'}</span>` : ""}
+        ${D.docker && D.docker.truth ? `<span class="tag glass pend" id="tTruth"><small>Hidden label</small>${lab(D.docker.truth)} ${D.docker.truth === v.label ? '<span class="ok">✓</span>' : '<span class="no">✗</span>'}</span>` : ""}
+      </div>
+    </section>
+    <section class="grid">
+      <aside class="flowcol glass">
+        <div class="fhead"><span class="kicker">The pipeline</span><span class="fnote">${TRACE ? `${TRACE.same_label}/${TRACE.traced} labels match Docker` : ""}</span></div>
+        <div class="flowbox" id="flowbox"><div class="flow" id="flow" style="width:${W}px;height:${H}px">
+          <svg class="wires" id="wires" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">
+            <defs><filter id="pglow" filterUnits="userSpaceOnUse" x="-20" y="-20" width="${W + 40}" height="${H + 40}"><feGaussianBlur stdDeviation="3" result="b"/>
+              <feMerge><feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs></svg>
+          ${NODES.map(n => `<div class="node" id="n-${n.id}" data-id="${n.id}" style="--c:${n.color};left:${n.x}px;top:${n.y}px;width:${n.w}px;height:${NH}px" tabindex="0" role="button" aria-label="${n.name}">
+            <span class="ic"><svg viewBox="0 0 24 24">${ICONS[n.id]}</svg></span>
+            <div class="tx"><div class="nm">${n.name}</div><div class="st" id="st-${n.id}">waiting</div></div><span class="badge"></span>
+            ${n.id !== "input" ? '<i class="port t"></i>' : ""}${n.id !== "writer" ? '<i class="port b"></i>' : ""}${n.id === "input" || n.id === "judge" ? '<i class="port l"></i>' : ""}</div>`).join("")}
+        </div></div>
+        <div class="ffoot"><div class="segs">${NODES.map(n => `<span class="seg" id="g-${n.id}" data-id="${n.id}" style="--c:${n.color}" title="${n.name}"></span>`).join("")}</div>
+          <div class="frow"><span id="stage">Ready</span><span class="btns">
+            <label class="follow" title="Scroll along with the run"><input type="checkbox" id="follow" ${follow ? "checked" : ""}>Follow</label>
+            <button class="btn" id="replay">↻ Replay</button><button class="btn" id="skip">Skip</button></span></div></div>
+      </aside>
+      <div class="cards" id="cards">
+        ${card("input")}
+        <div class="pairnote">Linker and Reader read the sentence side by side</div>
+        <div class="pair">${card("linker")}${card("reader")}</div>
+        ${card("attributor")}${card("kb")}${card("truth")}${card("judge")}${card("writer")}
+        <p class="foot">Recorded from the engine running in-process on the same input as the Docker container; recording changes no verdict.
+          Every number on this page is what the code computed for this sentence.</p>
+      </div>
+    </section>`;
+  const svg = $("#wires");
+  DUR = {};
+  for (const e of EDGES) {
+    const [a, b, kind, at] = e, d = wirePath(node(a), node(b), kind);
+    const g = document.createElementNS(SVGNS, "g");
     g.setAttribute("class", "edge"); g.id = `e-${a}-${b}`;
-    g.innerHTML = `<path class="base" d="${d}"/><path class="flow" d="${d}"/>`;
+    g.innerHTML = `<path class="wire" d="${d}"/><path class="stream" d="${d}"/>`;
     svg.appendChild(g);
-    const p = g.querySelector("path"), len = p.getTotalLength(), mid = p.getPointAtLength(len / 2);
-    const text = D.edge[`${a}>${b}`], w = text.length * 6.6 + 16;
-    const lab = document.createElementNS(SVG, "g");
-    lab.setAttribute("class", "lab");
-    lab.innerHTML = `<rect x="${mid.x - w / 2}" y="${mid.y - 11}" width="${w}" height="22" rx="11"/><text x="${mid.x}" y="${mid.y + 4}" text-anchor="middle">${esc(text)}</text>`;
-    g.appendChild(lab);
+    const p = g.querySelector("path"), len = p.getTotalLength();
+    DUR[ekey(e)] = REDUCED ? 120 : Math.round(Math.max(480, Math.min(1000, len * 4.2)));
+    if (at) {
+      const m = p.getPointAtLength(len * at), text = D.edge[ekey(e)], w = text.length * 6.5 + 16;
+      const l = document.createElementNS(SVGNS, "g");
+      l.setAttribute("class", "elab");
+      if (kind === "page") l.setAttribute("transform", `rotate(-90 ${m.x} ${m.y})`);
+      l.innerHTML = `<rect x="${m.x - w / 2}" y="${m.y - 9}" width="${w}" height="18" rx="9"/><text x="${m.x}" y="${m.y + 3.5}" text-anchor="middle">${esc(text)}</text>`;
+      g.appendChild(l);
+    }
   }
-  NODES.forEach(n => { const el = $(`#n-${n.id}`); el.onclick = () => openPanel(n.id); el.onkeydown = e => { if (e.key === "Enter") openPanel(n.id); }; });
-  $("#replay").onclick = play; $("#skip").onclick = finish;
-  fit(); play();
+  $$(".node, .seg").forEach(el => {
+    const go = () => { setFollow(false); scrollToCard(el.dataset.id); };
+    el.onclick = go; el.onkeydown = e => { if (e.key === "Enter") go(); };
+  });
+  $("#replay").onclick = () => { scrollTo({ top: 0, behavior: REDUCED ? "auto" : "smooth" }); play(); };
+  $("#skip").onclick = finish;
+  $("#follow").onchange = e => { follow = e.target.checked; if (follow && playing && RUNNING.size) scrollToCard([...RUNNING][0]); };
+  fit();
+  scrollTo({ top: 0 });
+  play();
 }
 
 function fit() {
-  const wrap = $("#wrap"); if (!wrap) return;
-  const s = Math.min(1, Math.max(0.55, (wrap.clientWidth - 2) / W));
-  $("#canvas").style.transform = `scale(${s})`;
-  $("#sizer").style.width = `${W * s}px`; $("#sizer").style.height = `${H * s}px`;
+  const box = $("#flowbox"); if (!box) return;
+  const mobile = matchMedia("(max-width: 980px)").matches;
+  const s = mobile ? Math.min(1, (box.clientWidth) / W) : Math.min(1.25, box.clientWidth / W, box.clientHeight / H);
+  $("#flow").style.transform = `translateX(-50%) scale(${s})`;
+  box.style.height = mobile ? `${H * s}px` : "";
 }
 addEventListener("resize", fit);
 
+/* ---- the run --------------------------------------------------------------------------------------- */
 function schedule() {
-  // a node starts when everything it waits for has arrived, like the pipeline itself
+  // a stage starts once everything it waits for has arrived, like the pipeline itself
   const start = {}, end = {};
   for (const n of NODES) {
     const ins = EDGES.filter(e => e[1] === n.id);
-    start[n.id] = ins.length ? Math.max(...ins.map(e => end[e[0]] + TRAVEL)) : 0;
+    start[n.id] = ins.length ? Math.max(...ins.map(e => end[e[0]] + DUR[ekey(e)])) : 0;
     end[n.id] = start[n.id] + RUN;
   }
   return { start, end };
 }
+function stop() { timers.forEach(clearTimeout); timers = []; playing = false; RUNNING.clear(); }
 
 function play() {
-  timers.forEach(clearTimeout); timers = [];
-  document.querySelectorAll(".node").forEach(el => el.classList.remove("running", "done"));
-  document.querySelectorAll(".edge").forEach(el => { el.classList.remove("flowing", "done"); el.querySelectorAll(".packet").forEach(c => c.remove()); });
-  const { start, end } = schedule(), at = (ms, f) => timers.push(setTimeout(f, 300 + ms));
+  stop();
+  playing = true;
+  $$(".node").forEach(el => el.classList.remove("running", "done", "active"));
+  $$(".card").forEach(el => el.classList.remove("running", "in", "active"));
+  $$(".edge").forEach(el => el.classList.remove("flowing", "done", "hot"));
+  $$(".seg").forEach(el => el.classList.remove("run", "done", "active"));
+  $$(".packet").forEach(c => c.remove());
+  $$(".tag").forEach(el => el.classList.add("pend"));
+  $("#hero").classList.remove("lit-linker", "lit-reader");
+  $$(".node .st").forEach(el => el.textContent = "waiting");
+  $$(".card .state").forEach(el => el.textContent = "waiting");
+  ACTIVE = "";
+  const { start, end } = schedule(), at = (ms, f) => timers.push(setTimeout(f, 400 + ms));
   for (const n of NODES) {
-    const el = $(`#n-${n.id}`);
-    at(start[n.id], () => el.classList.add("running"));
-    at(end[n.id], () => { el.classList.remove("running"); el.classList.add("done"); });
+    at(start[n.id], () => begin(n.id));
+    at(end[n.id], () => complete(n.id));
   }
-  for (const [a, b] of EDGES) {
-    const g = $(`#e-${a}-${b}`);
-    at(end[a], () => send(g));
-    at(end[a] + TRAVEL, () => { g.classList.remove("flowing"); g.classList.add("done"); g.querySelectorAll(".packet").forEach(c => c.remove()); });
+  for (const e of EDGES) {
+    at(end[e[0]], () => send(e, DUR[ekey(e)]));
+    at(end[e[0]] + DUR[ekey(e)], () => { const g = edgeEl(e); g.classList.remove("flowing"); g.classList.add("done"); });
   }
+  at(end.writer + 600, () => { playing = false; $("#stage").textContent = "Run complete"; spy(true); });
 }
 
-function send(g) {
-  // a packet of data travels the edge
-  g.classList.add("flowing");
-  const c = document.createElementNS(SVG, "circle");
-  c.setAttribute("r", "6"); c.setAttribute("class", "packet");
-  const m = document.createElementNS(SVG, "animateMotion");
-  m.setAttribute("dur", `${TRAVEL}ms`); m.setAttribute("fill", "freeze"); m.setAttribute("begin", "indefinite");
-  m.setAttribute("path", g.querySelector("path").getAttribute("d"));
-  m.setAttribute("calcMode", "spline"); m.setAttribute("keyTimes", "0;1"); m.setAttribute("keyPoints", "0;1"); m.setAttribute("keySplines", "0.45 0 0.25 1");
-  c.appendChild(m); g.insertBefore(c, g.querySelector(".lab"));
-  try { m.beginElement(); } catch (e) { c.remove(); }
+function begin(id) {
+  RUNNING.add(id);
+  $(`#n-${id}`).classList.add("running"); $(`#c-${id}`).classList.add("running"); $(`#g-${id}`).classList.add("run");
+  $(`#st-${id}`).textContent = "running…"; $(`#c-${id} .state`).textContent = "running";
+  setActive([...RUNNING]);
+  if (follow) scrollToCard(id);
 }
-
+function complete(id) {
+  RUNNING.delete(id);
+  const n = $(`#n-${id}`), c = $(`#c-${id}`);
+  n.classList.remove("running"); n.classList.add("done"); c.classList.remove("running"); c.classList.add("in");
+  $(`#g-${id}`).classList.remove("run"); $(`#g-${id}`).classList.add("done");
+  $(`#st-${id}`).textContent = DATA.short[id]; $(`#c-${id} .state`).textContent = "done";
+  if (id === "linker") $("#hero").classList.add("lit-linker");
+  if (id === "reader") $("#hero").classList.add("lit-reader");
+  if (id === "judge") { $("#tVerdict").classList.remove("pend"); document.body.dataset.verdict = DATA.v.label; }
+  if (id === "writer") $$(".tag").forEach(el => el.classList.remove("pend"));
+}
 function finish() {
-  timers.forEach(clearTimeout); timers = [];
-  document.querySelectorAll(".node").forEach(el => { el.classList.remove("running"); el.classList.add("done"); });
-  document.querySelectorAll(".edge").forEach(el => { el.classList.remove("flowing"); el.classList.add("done"); el.querySelectorAll(".packet").forEach(c => c.remove()); });
+  stop();
+  for (const n of NODES) { if (!$(`#n-${n.id}`).classList.contains("done")) complete(n.id); }
+  $$(".packet").forEach(c => c.remove());
+  $$(".edge").forEach(el => { el.classList.remove("flowing"); el.classList.add("done"); });
+  $("#stage").textContent = "Run complete";
+  spy(true);
 }
 
-/* ---- the node panel ------------------------------------------------------------------------------ */
-function openPanel(id) {
-  const n = node(id), D = DATA, i = NODES.indexOf(n);
-  const ins = EDGES.filter(e => e[1] === id).map(e => `${D.edge[`${e[0]}>${e[1]}`]} from ${node(e[0]).name}`);
-  const outs = EDGES.filter(e => e[0] === id).map(e => `${D.edge[`${e[0]}>${e[1]}`]} to ${node(e[1]).name}`);
-  OPEN = id;
-  document.querySelectorAll(".node").forEach(el => el.classList.toggle("sel", el.id === `n-${id}`));
-  $("#panel").innerHTML = `<div class="ph"><div class="ic" style="background:${n.color}"><svg viewBox="0 0 24 24">${ICONS[id]}</svg></div>
-      <div><h2>${n.name}</h2><div class="io">${ins.length ? "In: " + esc(ins.join(" · ")) : "The start of the run"}<br>${outs.length ? "Out: " + esc(outs.join(" · ")) : "Written to output.csv"}</div></div>
-      <div class="btns"><button id="pp" title="Previous stage" ${i ? "" : "disabled"}>‹</button><button id="pn" title="Next stage" ${i < NODES.length - 1 ? "" : "disabled"}>›</button><button id="px" title="Close">✕</button></div></div>
-    <div class="pb"><p class="what">${D.what[id]}</p>${D.panel[id]}</div>`;
-  $("#pp").onclick = () => openPanel(NODES[i - 1].id); $("#pn").onclick = () => openPanel(NODES[i + 1].id); $("#px").onclick = closePanel;
-  $("#panel").classList.add("open"); $("#panel").setAttribute("aria-hidden", "false"); $("#scrim").classList.add("open");
-  $("#panel").scrollTop = 0;
+const edgeEl = e => $(`#e-${e[0]}-${e[1]}`);
+function send(e, dur) {
+  // a glowing packet of data travels the wire, with a short tail
+  const g = edgeEl(e); if (!g) return;
+  g.classList.add("flowing");
+  if (REDUCED) return;
+  const d = g.querySelector("path").getAttribute("d");
+  [[4.5, 1], [3.2, .5], [2.2, .25]].forEach(([r, o], k) => timers.push(setTimeout(() => {
+    const c = document.createElementNS(SVGNS, "circle");
+    c.setAttribute("r", r); c.setAttribute("class", "packet"); c.setAttribute("opacity", o); c.setAttribute("filter", "url(#pglow)");
+    const m = document.createElementNS(SVGNS, "animateMotion");
+    m.setAttribute("dur", `${dur}ms`); m.setAttribute("fill", "freeze"); m.setAttribute("begin", "indefinite"); m.setAttribute("path", d);
+    m.setAttribute("calcMode", "spline"); m.setAttribute("keyTimes", "0;1"); m.setAttribute("keyPoints", "0;1"); m.setAttribute("keySplines", "0.45 0 0.25 1");
+    c.appendChild(m); g.insertBefore(c, g.querySelector(".elab"));
+    try { m.beginElement(); } catch (err) { c.remove(); return; }
+    setTimeout(() => c.remove(), dur + 60);
+  }, k * 50)));
 }
-function closePanel() {
-  OPEN = null;
-  $("#panel").classList.remove("open"); $("#panel").setAttribute("aria-hidden", "true"); $("#scrim").classList.remove("open");
-  document.querySelectorAll(".node.sel").forEach(el => el.classList.remove("sel"));
+
+/* ---- following the run, and the stage in view --------------------------------------------------------- */
+function setFollow(on) { follow = on; const f = $("#follow"); if (f) f.checked = on; }
+function scrollToCard(id) {
+  const c = $(`#c-${id}`); if (!c) return;
+  const mobile = matchMedia("(max-width: 980px)").matches, r = c.getBoundingClientRect();
+  const room = innerHeight - 92 - (mobile ? 90 : 20);
+  const top = scrollY + r.top - 92 - (r.height < room ? Math.max(0, (room - r.height) / 3) : 0);
+  scrollTo({ top: Math.max(0, top), behavior: REDUCED ? "auto" : "smooth" });
 }
-$("#scrim").onclick = closePanel;
+function setActive(ids, pulse) {
+  const key = ids.join(","); if (!ids.length || key === ACTIVE) return;
+  ACTIVE = key;
+  $$(".node, .card, .seg").forEach(el => el.classList.toggle("active", ids.includes(el.dataset.id)));
+  $$(".edge").forEach(el => el.classList.remove("hot"));
+  const first = node(ids[0]), i = NODES.indexOf(first);
+  $("#stage").textContent = ids.length > 1 ? `Stages ${String(i + 1).padStart(2, "0")}–${String(i + ids.length).padStart(2, "0")} / 08 · ${ids.map(x => node(x).name).join(" + ")}`
+    : `Stage ${String(i + 1).padStart(2, "0")} / 08 · ${first.name}`;
+  if (pulse && !playing) ids.forEach(id => EDGES.filter(e => e[1] === id).forEach(e => {
+    const g = edgeEl(e); g.classList.add("hot"); send(e, 650); setTimeout(() => g.classList.remove("flowing"), 700);
+  }));
+}
+function spy(pulse) {
+  if (playing && follow) return;
+  const line = innerHeight * 0.4;
+  const ids = $$(".card").filter(c => { const r = c.getBoundingClientRect(); return r.top <= line && r.bottom >= line; }).map(c => c.dataset.id);
+  if (!ids.length && scrollY < 40) ids.push("input");
+  if (ids.length) setActive(ids, pulse !== false);
+}
+let spyQueued = false;
+addEventListener("scroll", () => { if (spyQueued) return; spyQueued = true; setTimeout(() => { spyQueued = false; spy(); }, 80); }, { passive: true });
+const userScrolls = () => { if (playing && follow) setFollow(false); };
+addEventListener("wheel", userScrolls, { passive: true });
+addEventListener("touchmove", userScrolls, { passive: true });
 addEventListener("keydown", e => {
-  if (!OPEN) return;
-  const i = NODES.findIndex(n => n.id === OPEN);
-  if (e.key === "Escape") closePanel();
-  if (e.key === "ArrowRight" && i < NODES.length - 1) openPanel(NODES[i + 1].id);
-  if (e.key === "ArrowLeft" && i > 0) openPanel(NODES[i - 1].id);
+  if (["ArrowDown", "ArrowUp", "PageDown", "PageUp", "Home", "End", " "].includes(e.key) && e.target.tagName !== "SELECT") userScrolls();
 });
+
+/* ---- the universe in the background ---------------------------------------------------------------- */
+(function universe() {
+  const cv = $("#bg"), g = cv.getContext("2d");
+  let P = [], w = 0, h = 0;
+  function size() {
+    const dpr = Math.min(2, devicePixelRatio || 1);
+    w = innerWidth; h = innerHeight; cv.width = w * dpr; cv.height = h * dpr; cv.style.width = w + "px"; cv.style.height = h + "px";
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    P = Array.from({ length: Math.min(260, Math.round(w * h / 6500)) }, () => ({ x: Math.random() * w, y: Math.random() * h,
+      r: Math.random() * 1.3 + .3, vx: (Math.random() - .5) * .1, vy: (Math.random() - .5) * .1 - .04, a: Math.random() * .5 + .15,
+      lime: Math.random() < .13, tw: Math.random() * 6.28, z: Math.random() * .6 + .2 }));
+  }
+  function frame(t) {
+    g.clearRect(0, 0, w, h);
+    for (const p of P) {
+      if (!REDUCED) { p.x += p.vx; p.y += p.vy; if (p.x < -4) p.x = w + 4; if (p.x > w + 4) p.x = -4; if (p.y < -4) p.y = h + 4; if (p.y > h + 4) p.y = -4; }
+      const y = ((p.y - scrollY * p.z * .12) % h + h) % h, a = p.a * (.7 + .3 * Math.sin(t / 900 + p.tw));
+      g.fillStyle = p.lime ? `rgba(215,241,59,${a})` : `rgba(220,226,240,${a * .75})`;
+      g.beginPath(); g.arc(p.x, y, p.r, 0, 6.283); g.fill();
+    }
+    if (!REDUCED) requestAnimationFrame(frame);
+  }
+  addEventListener("resize", size); size(); requestAnimationFrame(frame);
+  if (REDUCED) addEventListener("scroll", () => requestAnimationFrame(frame), { passive: true });
+})();
 
 loadIndex();
 </script>
