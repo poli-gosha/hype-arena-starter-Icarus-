@@ -29,7 +29,7 @@ It must end with `the format checks pass`, and `out/output/output.csv` must hold
 ## 09:15: record the video (deadline 11:00)
 
 1. Open http://localhost:8000 for the story of one statement (scroll through it), then click **Run it live** (http://localhost:8000/console.html).
-2. In the console, click **Load sample.csv**, then **Run polygraph**. It takes about 4 seconds; the diagram lights up and every row gets its verdict.
+2. In the console, tick **Also label the 20 sample sentences**, then click **Build and run in Docker**. It builds our image and runs it exactly like the judges' check (about 2–3 minutes), shows the organisers' checker output and our score, and offers **Download output.csv**. Filter the table with **Sample rows** to show the sample's verdicts. It takes about 4 seconds; the diagram lights up and every row gets its verdict.
 2. Click two or three FALSE rows to show the evidence board. Each one has a timeline and a one-line "why".
 3. Show the **Claim Forge** tab: the 1,000 claims and their types.
 4. Keep the architecture diagram on screen throughout. The rules require it beside the run.

@@ -1,374 +1,337 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Polygraph · Team Icarus</title>
+<title>Polygraph · Live run</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;800&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg: #07080a; --panel: #0e1014; --panel2: #13161c; --line: #232833; --text: #d9dee8; --dim: #7c8596;
-    --true: #39ff88; --false: #ff3b5c; --unsure: #ffb020; --accent: #59c3ff;
-    --mono: "JetBrains Mono", "IBM Plex Mono", Consolas, "SF Mono", Menlo, monospace;
+    --bg: #F5F5F1; --card: #FFFFFF; --ink: #111214; --soft: #5C6170; --line: #E2E2DC;
+    --lime: #D7F13B; --green: #1E8E4F; --green-bg: #E6F4EC; --red: #C8303F; --red-bg: #FBE9EB;
+    --amber: #A86B00; --amber-bg: #FFF3DA; --blue: #2859B5;
+    --font: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
   }
   * { box-sizing: border-box; }
-  html, body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--mono); font-size: 14px; }
-  body::after { /* faint scanlines */
-    content: ""; position: fixed; inset: 0; pointer-events: none;
-    background: repeating-linear-gradient(0deg, rgba(255,255,255,.018) 0 1px, transparent 1px 3px);
+  html, body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 16px; line-height: 1.5; }
+  a { color: inherit; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px 80px; }
+  header { display: flex; align-items: center; gap: 16px; padding: 18px 0; border-bottom: 1px solid var(--line); margin-bottom: 36px; }
+  header .back { text-decoration: none; color: var(--soft); font-weight: 500; }
+  header .back:hover { color: var(--ink); }
+  header .name { font-weight: 800; }
+  header .team { margin-left: auto; color: var(--soft); font-size: 14px; }
+  h1 { font-size: clamp(32px, 4.5vw, 48px); line-height: 1.1; letter-spacing: -0.02em; margin: 0 0 12px; }
+  .lead { color: var(--soft); font-size: 18px; max-width: 760px; margin: 0 0 32px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 26px 28px; margin-bottom: 20px; }
+  .card h2 { font-size: 20px; margin: 0 0 4px; display: flex; align-items: center; gap: 12px; }
+  .card h2 .n { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--ink);
+    color: #fff; font-size: 14px; }
+  .card .sub { color: var(--soft); margin: 0 0 20px; }
+  .facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-bottom: 22px; }
+  .facts div { border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+  .facts b { display: block; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--soft); margin-bottom: 4px; }
+  .actions { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; }
+  button, .button { font: 600 16px var(--font); border-radius: 999px; padding: 12px 24px; border: 1px solid var(--ink); cursor: pointer;
+    background: var(--card); color: var(--ink); text-decoration: none; display: inline-flex; align-items: center; gap: 8px; }
+  button.primary, .button.primary { background: var(--lime); border-color: #B9D21F; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  label.check { display: inline-flex; gap: 8px; align-items: center; color: var(--soft); }
+  .note { color: var(--soft); font-size: 14px; }
+  .warn { background: var(--amber-bg); color: var(--amber); border-radius: 10px; padding: 12px 16px; margin-top: 16px; display: none; }
+  .err { background: var(--red-bg); color: var(--red); border-radius: 10px; padding: 12px 16px; margin-top: 16px; display: none; white-space: pre-wrap; }
+
+  /* progress */
+  .steps { list-style: none; margin: 0; padding: 0; }
+  .steps li { display: grid; grid-template-columns: 34px 1fr auto; gap: 14px; align-items: center; padding: 14px 0; border-bottom: 1px solid var(--line); }
+  .steps li:last-child { border-bottom: 0; }
+  .icon { width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--line); display: grid; place-items: center; font-size: 14px; font-weight: 800; }
+  .waiting .icon { color: var(--soft); }
+  .running .icon { border-color: var(--blue); border-top-color: transparent; animation: spin .9s linear infinite; }
+  .done .icon { background: var(--green); border-color: var(--green); color: #fff; }
+  .failed .icon { background: var(--red); border-color: var(--red); color: #fff; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .steps .what { font-weight: 600; }
+  .steps .detail { color: var(--soft); font-size: 14px; }
+  .steps .state { color: var(--soft); font-size: 14px; font-variant-numeric: tabular-nums; }
+  .meta { display: flex; gap: 24px; color: var(--soft); font-size: 14px; margin-top: 12px; font-variant-numeric: tabular-nums; }
+  details { margin-top: 16px; }
+  summary { cursor: pointer; color: var(--soft); font-weight: 500; }
+  pre { background: #F3F3EE; border: 1px solid var(--line); border-radius: 10px; padding: 14px; font: 12.5px/1.5 ui-monospace, Consolas, monospace;
+    max-height: 320px; overflow: auto; white-space: pre-wrap; margin: 10px 0 0; }
+
+  /* results */
+  .numbers { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 22px; }
+  .numbers div { border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; }
+  .numbers b { display: block; font-size: 30px; font-weight: 800; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+  .numbers span { display: block; font-weight: 600; }
+  .numbers small { display: block; color: var(--soft); font-size: 13px; margin-top: 2px; }
+  .checker { display: flex; gap: 12px; align-items: center; margin: 4px 0 6px; }
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 13px; font-weight: 600; }
+  .badge.pass { background: var(--green-bg); color: var(--green); } .badge.fail { background: var(--red-bg); color: var(--red); }
+  .tabs { display: flex; gap: 6px; border-bottom: 1px solid var(--line); margin: 26px 0 14px; }
+  .tabs button { border: 0; border-bottom: 2px solid transparent; border-radius: 0; padding: 10px 14px; background: none; color: var(--soft); }
+  .tabs button.on { border-bottom-color: var(--ink); color: var(--ink); }
+  .filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+  .filters button { padding: 6px 14px; font-size: 14px; border-color: var(--line); }
+  .filters button.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .filters input { margin-left: auto; font: 15px var(--font); padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; min-width: 240px; }
+  table { width: 100%; border-collapse: collapse; font-size: 15px; }
+  th { text-align: left; font-size: 13px; color: var(--soft); font-weight: 600; text-transform: uppercase; letter-spacing: .04em;
+    padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  td { padding: 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  td .date { display: block; color: var(--soft); font-size: 13px; }
+  .pill { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 13px; font-weight: 600; }
+  .pill.true { background: var(--green-bg); color: var(--green); } .pill.false { background: var(--red-bg); color: var(--red); }
+  .pill.unsure { background: var(--amber-bg); color: var(--amber); }
+  .ok { color: var(--green); font-weight: 800; } .no { color: var(--red); font-weight: 800; }
+  .conf { font-variant-numeric: tabular-nums; color: var(--soft); white-space: nowrap; }
+  .more { margin-top: 14px; }
+  #results { display: none; }
+
+  /* one sentence */
+  .one { display: grid; grid-template-columns: 160px 1fr auto; gap: 10px; }
+  .one input { font: 16px var(--font); padding: 11px 14px; border: 1px solid var(--line); border-radius: 10px; }
+  .answer { margin-top: 16px; display: none; border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; }
+  .answer ul { margin: 8px 0 0; padding-left: 20px; color: var(--soft); }
+
+  @media (max-width: 760px) {
+    .facts, .numbers { grid-template-columns: 1fr 1fr; }
+    .one { grid-template-columns: 1fr; }
+    .filters input { margin-left: 0; min-width: 0; width: 100%; }
+    td:nth-child(5), th:nth-child(5) { display: none; }
   }
-  header { display: flex; align-items: center; gap: 16px; padding: 14px 22px; border-bottom: 1px solid var(--line); }
-  .logo { font-weight: 700; letter-spacing: .18em; font-size: 18px; }
-  .logo b { color: var(--false); } .logo i { color: var(--true); font-style: normal; }
-  .tag { color: var(--dim); font-size: 12px; }
-  .status { margin-left: auto; font-size: 12px; color: var(--dim); display: flex; align-items: center; gap: 8px; }
-  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--unsure); box-shadow: 0 0 8px var(--unsure); }
-  .dot.ok { background: var(--true); box-shadow: 0 0 8px var(--true); }
-  nav { display: flex; gap: 4px; padding: 0 22px; border-bottom: 1px solid var(--line); }
-  nav button { background: none; border: 0; color: var(--dim); font: inherit; padding: 12px 14px; cursor: pointer; border-bottom: 2px solid transparent; }
-  nav button.on { color: var(--text); border-bottom-color: var(--accent); }
-  main { padding: 18px 22px 40px; max-width: 1500px; margin: 0 auto; }
-  section { display: none; } section.on { display: block; }
-  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
-  h2 { font-size: 12px; letter-spacing: .14em; color: var(--dim); font-weight: 600; margin: 0 0 12px; text-transform: uppercase; }
-
-  /* architecture diagram */
-  #diagram svg { width: 100%; height: auto; display: block; }
-  .node rect { fill: var(--panel2); stroke: var(--line); stroke-width: 1.2; rx: 10; transition: all .35s; }
-  .node.lit rect { stroke: var(--accent); fill: #10202c; filter: drop-shadow(0 0 8px rgba(89,195,255,.55)); }
-  .node.done rect { stroke: #2d6a4f; }
-  .node .t { fill: var(--text); font-size: 13px; font-weight: 700; }
-  .node .s { fill: var(--dim); font-size: 10.5px; }
-  .node .m { fill: var(--accent); font-size: 11px; }
-  .edge { stroke: var(--line); stroke-width: 2; fill: none; }
-  .edge.lit { stroke: var(--accent); stroke-dasharray: 6 6; animation: flow .6s linear infinite; }
-  @keyframes flow { to { stroke-dashoffset: -12; } }
-
-  .grid { display: grid; grid-template-columns: 380px 1fr; gap: 16px; margin-top: 16px; }
-  @media (max-width: 1000px) { .grid { grid-template-columns: 1fr; } }
-  textarea { width: 100%; min-height: 230px; background: var(--bg); color: var(--text); border: 1px solid var(--line);
-    border-radius: 8px; padding: 10px; font: 12px/1.5 var(--mono); resize: vertical; }
-  .btns { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
-  .btn { background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 9px 14px;
-    font: inherit; cursor: pointer; }
-  .btn:hover { border-color: var(--accent); }
-  .btn.go { background: var(--accent); color: #031018; border-color: var(--accent); font-weight: 700; }
-  .btn:disabled { opacity: .5; cursor: wait; }
-  .hint { color: var(--dim); font-size: 11.5px; margin-top: 8px; line-height: 1.5; }
-  .summary { display: flex; gap: 18px; margin-bottom: 12px; font-size: 13px; color: var(--dim); flex-wrap: wrap; }
-  .summary b { font-size: 20px; margin-right: 6px; }
-
-  /* verdict rows */
-  .row { display: grid; grid-template-columns: 112px 1fr 120px; gap: 14px; align-items: center; padding: 12px;
-    border: 1px solid var(--line); border-radius: 10px; margin-bottom: 8px; background: var(--panel2); cursor: pointer; }
-  .row:hover { border-color: #3a4252; }
-  .row.sel { border-color: var(--accent); }
-  .stamp { font-weight: 800; letter-spacing: .12em; font-size: 15px; text-align: center; padding: 6px 4px; border: 2px solid;
-    border-radius: 6px; transform: rotate(-4deg); }
-  .stamp.true { color: var(--true); border-color: var(--true); text-shadow: 0 0 8px rgba(57,255,136,.6); }
-  .stamp.false { color: var(--false); border-color: var(--false); text-shadow: 0 0 8px rgba(255,59,92,.6); }
-  .stamp.unsure { color: var(--unsure); border-color: var(--unsure); }
-  .stamp.wait { color: var(--dim); border-color: var(--line); transform: none; }
-  .txt { font-size: 13.5px; line-height: 1.45; }
-  .txt .d { color: var(--dim); font-size: 11px; margin-right: 8px; }
-  .why { color: var(--dim); font-size: 11.5px; margin-top: 4px; }
-  .chips { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 5px; }
-  .chip { font-size: 10.5px; padding: 2px 7px; border-radius: 99px; border: 1px solid var(--line); color: var(--dim); }
-  .chip.agrees { color: var(--true); border-color: rgba(57,255,136,.4); }
-  .chip.stale, .chip.premature, .chip.invented { color: var(--false); border-color: rgba(255,59,92,.45); }
-  .gauge { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; margin-top: 6px; }
-  .gauge i { display: block; height: 100%; }
-  .conf { text-align: right; font-size: 12px; color: var(--dim); }
-  .conf b { font-size: 18px; color: var(--text); }
-  .needle { height: 26px; }
-
-  /* evidence */
-  #evidence .fact { margin-bottom: 18px; }
-  #evidence .fact h3 { font-size: 13px; margin: 0 0 4px; }
-  #evidence .fact p { margin: 0 0 6px; color: var(--dim); font-size: 12px; }
-  .tl svg { width: 100%; height: auto; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; }
-  .legend { display: flex; gap: 14px; font-size: 11px; color: var(--dim); margin-top: 6px; flex-wrap: wrap; }
-  .legend span::before { content: "●"; margin-right: 5px; }
-  .legend .lt::before { color: var(--true); } .legend .lf::before { color: var(--false); }
-  .legend .lu::before { color: #8a93a6; } .legend .lr::before { color: var(--accent); }
-
-  /* claims */
-  .filters { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
-  .filters button.on { border-color: var(--accent); color: var(--accent); }
-  .claim { padding: 10px 12px; border-bottom: 1px solid var(--line); display: grid; grid-template-columns: 86px 1fr 60px; gap: 12px; align-items: baseline; }
-  .claim .ty { font-size: 11px; color: var(--accent); text-transform: uppercase; letter-spacing: .08em; }
-  .claim .src { color: var(--dim); font-size: 11px; margin-top: 3px; }
-  .claim .c { text-align: right; color: var(--true); }
-  .empty { color: var(--dim); padding: 30px; text-align: center; }
-  .principles { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin-top: 16px; }
-  .principles .card p { color: var(--dim); line-height: 1.55; margin: 0; font-size: 12.5px; }
-  .principles .card h3 { margin: 0 0 6px; font-size: 13px; }
 </style>
 </head>
 <body>
-<header>
-  <div class="logo"><b>HYPE</b> ⁄ <i>TRUTH</i> · POLYGRAPH</div>
-  <div class="tag">Team Icarus · a lie detector for Hooly · no LLM at run time</div>
-  <div class="status"><span class="dot" id="dot"></span><span id="statusText">connecting…</span></div>
-</header>
-<nav>
-  <button class="on" data-tab="run">Live run</button>
-  <button data-tab="claims">Claim forge</button>
-  <button data-tab="how">How it works</button>
-</nav>
-<main>
-  <div class="card" id="diagram"><h2>Architecture · the system as it runs</h2><div id="svgwrap"></div></div>
+<div class="wrap">
+  <header>
+    <a class="back" href="./">← The story</a>
+    <span class="name">Polygraph · live run</span>
+    <span class="team">Team Icarus · Hype or Truth</span>
+  </header>
 
-  <section class="on" id="tab-run">
-    <div class="grid">
-      <div class="card">
-        <h2>Rows to judge</h2>
-        <textarea id="input" spellcheck="false" placeholder="One row per line:  date | sentence&#10;2026-09-08 | Hooly Jules works in 8 languages."></textarea>
-        <div class="btns">
-          <button class="btn" id="loadSample">Load sample.csv</button>
-          <button class="btn" id="loadDemo">Load demo rows</button>
-          <button class="btn go" id="runBtn">▶ Run polygraph</button>
-        </div>
-        <div class="hint">Each row is judged against a year of Hooly's pages: 1,900 labelled practice rows and their timelines. Click a verdict to see the evidence.</div>
+  <h1>Run Polygraph, for real.</h1>
+  <p class="lead">This page builds our Docker image and runs it the way the judges will: offline, as user 10001, on 2 CPUs and
+    6 GB of memory, with a 30-minute limit. It reads the practice rows with every fifth label hidden, then the organisers'
+    own checker inspects the table it hands in, and we compare our labels with the hidden ones.</p>
+
+  <!-- 1 -->
+  <section class="card">
+    <h2><span class="n">1</span>What will run</h2>
+    <p class="sub">Exactly what <code>scripts/check.sh</code> does, started from this page.</p>
+    <div class="facts">
+      <div><b>Input</b>1,897 practice sentences about Hooly. 380 of their labels are hidden; the system must label those.</div>
+      <div><b>Limits</b>No network, read-only disk, 2 CPUs, 6 GB of memory, 30 minutes, as the judges set them.</div>
+      <div><b>Output</b>One table, <code>output.csv</code>: a label for every hidden sentence, plus 1,000 new claims.</div>
+    </div>
+    <div class="actions">
+      <button class="primary" id="start">Build and run in Docker</button>
+      <label class="check"><input type="checkbox" id="sample"> Also label the 20 sample sentences</label>
+      <span class="note">Takes about 2 to 3 minutes.</span>
+    </div>
+    <div class="warn" id="dockerWarn">Docker isn't available on this computer. Install Docker Desktop, start it, and wait until it says
+      “Engine running”.</div>
+  </section>
+
+  <!-- 2 -->
+  <section class="card" id="progressCard">
+    <h2><span class="n">2</span>Progress</h2>
+    <p class="sub" id="progressSub">Nothing has run yet.</p>
+    <ul class="steps" id="steps"></ul>
+    <div class="meta"><span id="elapsed"></span><span id="memory"></span></div>
+    <div class="err" id="error"></div>
+    <details><summary>Show the live log</summary><pre id="log">No log yet.</pre></details>
+  </section>
+
+  <!-- 3 -->
+  <section class="card" id="results">
+    <h2><span class="n">3</span>Results</h2>
+    <p class="sub" id="resultsSub"></p>
+    <div class="numbers" id="numbers"></div>
+    <div class="checker"><strong>Organisers' checker</strong><span class="badge" id="checkBadge"></span></div>
+    <pre id="checker"></pre>
+    <div class="actions" style="margin-top:18px">
+      <a class="button primary" href="/api/live/output.csv" download="output.csv">Download output.csv</a>
+      <span class="note">The exact table the container wrote.</span>
+    </div>
+
+    <div class="tabs">
+      <button class="on" data-tab="rows" id="tabRows">Labelled sentences</button>
+      <button data-tab="claims" id="tabClaims">New claims</button>
+    </div>
+    <div id="rowsView">
+      <div class="filters" id="rowFilters">
+        <button class="on" data-f="all">All</button><button data-f="right">Correct</button><button data-f="wrong">Wrong</button>
+        <button data-f="false">Called false</button><button data-f="sample">Sample rows</button>
+        <input id="rowSearch" placeholder="Search sentences">
       </div>
-      <div>
-        <div class="card">
-          <h2>Verdicts</h2>
-          <div class="summary" id="summary"></div>
-          <div id="rows"><div class="empty">Load rows and press Run.</div></div>
-        </div>
-        <div class="card" id="evidence" style="margin-top:16px"><h2>Evidence board</h2><div id="evBody" class="empty">Click a verdict.</div></div>
-      </div>
+      <table><thead><tr><th>Sentence</th><th>Our label</th><th>Confidence</th><th>Hidden label</th><th></th></tr></thead>
+        <tbody id="rowBody"></tbody></table>
+      <button class="more" id="rowMore">Show more</button>
+    </div>
+    <div id="claimsView" style="display:none">
+      <div class="filters" id="claimFilters"></div>
+      <table><thead><tr><th>Type</th><th>Claim</th><th>Confidence</th></tr></thead><tbody id="claimBody"></tbody></table>
+      <button class="more" id="claimMore">Show more</button>
     </div>
   </section>
 
-  <section id="tab-claims">
-    <div class="card" style="margin-top:16px">
-      <h2>1,000 new claims · each one read back by our referee clone</h2>
-      <div class="filters" id="filters"></div>
-      <div id="claims" class="empty">Loading claims… (the first time takes about a minute)</div>
+  <!-- 4 -->
+  <section class="card">
+    <h2><span class="n">4</span>Check one sentence</h2>
+    <p class="sub">Instant, without Docker: the same engine, answering for a single sentence and saying why.</p>
+    <div class="one">
+      <input id="oneDate" type="date" value="2026-09-08">
+      <input id="oneText" value="Hooly Jules works in 8 languages.">
+      <button id="oneGo">Check</button>
     </div>
+    <div class="answer" id="answer"></div>
   </section>
-
-  <section id="tab-how">
-    <div class="principles" id="principles"></div>
-  </section>
-</main>
+</div>
 
 <script>
-const API = "";
-const STAGES = [
-  { id: "linker", name: "Linker", sub: "which Hooly subjects" },
-  { id: "reader", name: "Reader", sub: "values, as the referee reads" },
-  { id: "attributor", name: "Attributor", sub: "trained: value → fact" },
-  { id: "truth", name: "Truth engine", sub: "timelines × page trust" },
-  { id: "judge", name: "Judge", sub: "trained: true / false / unsure" },
-  { id: "forge", name: "Claim forge", sub: "1,000 true claims" },
-];
-const DEMO = [
-  "2026-09-08 | Hooly Jules works in 8 languages.",
-  "2026-10-20 | Hooly AI Pro costs €59 per month.",
-  "2026-06-10 | Gavin: Hooly Gemini speaks 40 languages, which is more than any competitor.",
-  "2025-11-14 | Hooly Gemini handles 22 formats.",
-  "2026-10-26 | Hooly Gemini scored 99.6% last quarter",
-  "2026-06-26 | Its inner screen is 8 inch, and the battery of Hooly Pixel Fold is 4,700 mAh.",
-];
-const $ = (s) => document.querySelector(s);
-const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-
-/* ---------- architecture diagram ---------- */
-function drawDiagram() {
-  const W = 1180, H = 150, n = STAGES.length, bw = 160, gap = (W - 40 - n * bw) / (n - 1);
-  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Pipeline">`;
-  s += `<text x="20" y="18" fill="#7c8596" font-size="11">universe.csv · ~20,000 rows</text>`;
-  s += `<text x="${W - 20}" y="18" fill="#7c8596" font-size="11" text-anchor="end">output.csv · labels + 1,000 claims</text>`;
-  STAGES.forEach((st, i) => {
-    const x = 20 + i * (bw + gap), y = 34;
-    if (i) s += `<path class="edge" id="e-${st.id}" d="M${x - gap + 2} ${y + 46} L${x - 4} ${y + 46}"/>`;
-    s += `<g class="node" id="n-${st.id}"><rect x="${x}" y="${y}" width="${bw}" height="92"/>
-      <text class="t" x="${x + 12}" y="${y + 24}">${i + 1}. ${st.name}</text>
-      <text class="s" x="${x + 12}" y="${y + 44}">${st.sub}</text>
-      <text class="m" x="${x + 12}" y="${y + 74}" id="m-${st.id}">·</text></g>`;
-  });
-  $("#svgwrap").innerHTML = s + "</svg>";
-}
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-async function animate(stages) {
-  const by = Object.fromEntries((stages || []).map((s) => [s.name, s]));
-  for (const st of STAGES) {
-    document.querySelectorAll(".node").forEach((n) => n.classList.remove("lit"));
-    $(`#n-${st.id}`).classList.add("lit");
-    const e = $(`#e-${st.id}`); if (e) e.classList.add("lit");
-    const m = by[st.id];
-    $(`#m-${st.id}`).textContent = m ? `${m.count.toLocaleString()} · ${m.ms < 1000 ? Math.round(m.ms) + " ms" : (m.ms / 1000).toFixed(1) + " s"}` : "—";
-    await sleep(260);
-    $(`#n-${st.id}`).classList.add("done");
-  }
-  document.querySelectorAll(".node").forEach((n) => n.classList.remove("lit"));
-  document.querySelectorAll(".edge").forEach((e) => e.classList.remove("lit"));
-}
-function pulseWaiting(on) {
-  if (!on) return;
-  let i = 0;
-  const t = setInterval(() => {
-    if (!pulseWaiting.busy) { clearInterval(t); return; }
-    document.querySelectorAll(".node").forEach((n) => n.classList.remove("lit"));
-    $(`#n-${STAGES[i % STAGES.length].id}`).classList.add("lit"); i++;
-  }, 300);
-}
-
-/* ---------- values ---------- */
-function fmt(v) {
-  if (!v) return "";
-  const n = (x) => typeof x === "number" ? x.toLocaleString("en-US", { maximumFractionDigits: 3 }) : x;
-  const cur = { EUR: "€", USD: "$", GBP: "£" };
-  switch (v.kind) {
-    case "money": return `${cur[v.currency] || v.currency + " "}${n(v.value)}${v.per ? " / " + v.per : ""}`;
-    case "quantity": return `${n(v.value)} ${v.unit}${v.value === 1 || /^[A-Z]/.test(v.unit) || ["m","g","kg","km","cm","mm","in","mAh"].includes(v.unit) ? "" : "s"}`;
-    case "duration": return `${n(v.value)} ${v.unit}`;
-    case "percent": return `${n(v.value)}%`;
-    case "version": return `v${v.value}`;
-    case "boolean": return v.value ? "yes" : "no";
-    default: return String(v.value);
-  }
-}
-const STATUS_WORDS = { agrees: "holds on this date", stale: "was true earlier — stale", premature: "only true later — premature",
-  invented: "never true in the timeline", unknown: "no other evidence" };
-
-/* ---------- run ---------- */
-let LAST = null;
-function parseInput() {
-  return $("#input").value.split("\n").map((l) => l.trim()).filter(Boolean).map((l, i) => {
-    const m = l.match(/^(\d{4}-\d{2}-\d{2})\s*[|,;\t]\s*(.+)$/);
-    return m ? { id: `r-${i + 1}`, date: m[1], text: m[2] } : { id: `r-${i + 1}`, date: "2026-10-28", text: l };
-  });
-}
-async function run() {
-  const rows = parseInput();
-  if (!rows.length) return;
-  $("#runBtn").disabled = true;
-  $("#rows").innerHTML = rows.map((r) => rowHtml({ ...r, verdict: "wait" })).join("");
-  $("#evBody").className = "empty"; $("#evBody").textContent = "Judging…";
-  pulseWaiting.busy = true; pulseWaiting(true);
-  try {
-    const res = await fetch(API + "/api/run", { method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ rows }) });
-    if (!res.ok) throw new Error(await res.text());
-    LAST = await res.json();
-  } catch (e) {
-    pulseWaiting.busy = false; $("#runBtn").disabled = false;
-    $("#rows").innerHTML = `<div class="empty">Run failed: ${esc(e.message).slice(0, 300)}</div>`; return;
-  }
-  pulseWaiting.busy = false;
-  await animate(LAST.stages);
-  $("#runBtn").disabled = false;
-  const c = { true: 0, false: 0, unsure: 0 };
-  LAST.rows.forEach((r) => c[r.verdict] = (c[r.verdict] || 0) + 1);
-  $("#summary").innerHTML = `<span><b style="color:var(--true)">${c.true}</b>true</span><span><b style="color:var(--false)">${c.false}</b>false</span><span><b style="color:var(--unsure)">${c.unsure}</b>unsure</span>`;
-  $("#rows").innerHTML = "";
-  for (const r of LAST.rows) { $("#rows").insertAdjacentHTML("beforeend", rowHtml(r)); await sleep(70); }
-  document.querySelectorAll(".row").forEach((el) => el.onclick = () => select(el.dataset.id));
-  const firstFalse = LAST.rows.find((r) => r.verdict === "false") || LAST.rows[0];
-  if (firstFalse) select(firstFalse.id);
-}
-function rowHtml(r) {
-  const col = { true: "var(--true)", false: "var(--false)", unsure: "var(--unsure)" }[r.verdict] || "var(--line)";
-  const conf = r.confidence == null ? null : Math.round(r.confidence * 100);
-  const chips = (r.facts || []).map((f) => `<span class="chip ${f.status}">${esc(f.subject)} · ${esc(f.attribute.replace(/_/g, " "))} = ${esc(fmt(f.value))}</span>`).join("");
-  return `<div class="row" data-id="${esc(r.id)}">
-    <div class="stamp ${r.verdict}">${r.verdict === "wait" ? "· · ·" : r.verdict.toUpperCase()}</div>
-    <div><div class="txt"><span class="d">${esc(r.date)}</span>${esc(r.text)}</div>
-      ${r.why ? `<div class="why">→ ${esc(r.why)}</div>` : ""}<div class="chips">${chips}</div></div>
-    <div class="conf">${conf == null ? (r.verdict === "unsure" ? "no confidence" : "") : `<b>${conf}%</b> sure`}
-      <div class="gauge"><i style="width:${conf ?? 0}%;background:${col}"></i></div></div></div>`;
-}
-
-/* ---------- evidence ---------- */
-function select(id) {
-  document.querySelectorAll(".row").forEach((el) => el.classList.toggle("sel", el.dataset.id === id));
-  const r = LAST.rows.find((x) => x.id === id); if (!r) return;
-  const ev = $("#evBody"); ev.className = "";
-  if (!r.facts || !r.facts.length) {
-    ev.innerHTML = `<p class="why">No fact was extracted from this sentence, so it was judged on its page and its wording. ${esc(r.why)}</p>`; return;
-  }
-  ev.innerHTML = r.facts.map((f, i) => {
-    const tl = LAST.timelines[`${f.subject}|${f.attribute}`];
-    return `<div class="fact"><h3>${esc(f.subject)} · ${esc(f.attribute.replace(/_/g, " "))}: <span style="color:${f.status === "agrees" ? "var(--true)" : ["stale","premature","invented"].includes(f.status) ? "var(--false)" : "var(--dim)"}">${esc(fmt(f.value))}</span></h3>
-      <p>This row says ${esc(fmt(f.value))} on ${esc(r.date)}: ${STATUS_WORDS[f.status] || f.status}.</p>
-      <div class="tl">${tl ? timeline(tl, f, r.date) : '<div class="empty">no timeline</div>'}</div></div>`;
-  }).join("") + `<div class="legend"><span class="lt">labelled true</span><span class="lf">labelled false</span><span class="lu">unlabelled row</span><span class="lr">this row</span></div>`;
-}
-function timeline(tl, f, day) {
-  const W = 900, H = 170, L = 60, R = 20, T = 18, B = 34;
-  const t0 = Date.parse("2025-10-01"), t1 = Date.parse("2026-11-01");
-  const X = (d) => L + (W - L - R) * (Date.parse(d) - t0) / (t1 - t0);
-  const vals = []; const key = (v) => JSON.stringify(v);
-  [...tl.steps.map((s) => s.value), ...tl.mentions.map((m) => m.value), f.value].forEach((v) => { if (!vals.some((x) => key(x) === key(v))) vals.push(v); });
-  const Y = (v) => T + (H - T - B) * (vals.length === 1 ? .5 : vals.findIndex((x) => key(x) === key(v)) / (vals.length - 1));
-  let s = `<svg viewBox="0 0 ${W} ${H}">`;
-  for (let m = 0; m <= 13; m += 2) { const d = new Date(2025, 9 + m, 1); const x = X(d.toISOString().slice(0, 10));
-    s += `<line x1="${x}" y1="${T - 6}" x2="${x}" y2="${H - B + 4}" stroke="#1a1e26"/><text x="${x}" y="${H - 12}" fill="#5d6577" font-size="10" text-anchor="middle">${d.toLocaleString("en", { month: "short" })} ${String(d.getFullYear()).slice(2)}</text>`; }
-  vals.forEach((v) => s += `<text x="${L - 8}" y="${Y(v) + 4}" fill="#7c8596" font-size="10.5" text-anchor="end">${esc(fmt(v)).slice(0, 12)}</text>`);
-  tl.steps.forEach((st, i) => { const x0 = X(st.from), x1 = st.to ? X(st.to) : X("2026-10-29"), y = Y(st.value);
-    s += `<line x1="${x0}" y1="${y}" x2="${x1}" y2="${y}" stroke="#39ff88" stroke-width="3" opacity=".75"/>`;
-    const nx = tl.steps[i + 1]; if (nx) s += `<line x1="${x1}" y1="${y}" x2="${x1}" y2="${Y(nx.value)}" stroke="#39ff88" stroke-width="1.5" stroke-dasharray="3 3" opacity=".6"/>`; });
-  tl.mentions.forEach((m) => { const c = m.verdict === "true" ? "#39ff88" : m.verdict === "false" ? "#ff3b5c" : "#8a93a6";
-    s += `<circle cx="${X(m.date)}" cy="${Y(m.value)}" r="4.5" fill="${c}" fill-opacity=".85"/>`; });
-  s += `<circle cx="${X(day)}" cy="${Y(f.value)}" r="9" fill="none" stroke="#59c3ff" stroke-width="2.5"/><line x1="${X(day)}" y1="${T - 6}" x2="${X(day)}" y2="${H - B + 4}" stroke="#59c3ff" stroke-dasharray="2 4"/>`;
-  return s + "</svg>";
-}
-
-/* ---------- claims ---------- */
-let CLAIMS = [], FILTER = "all";
-async function loadClaims() {
-  if (CLAIMS.length) return;
-  try { CLAIMS = (await (await fetch(API + "/api/claims")).json()).claims; } catch (e) { $("#claims").textContent = "Could not load claims."; return; }
-  const types = ["all", "fact", "compare", "change", "at_event", "relation"];
-  $("#filters").innerHTML = types.map((t) => `<button class="btn ${t === FILTER ? "on" : ""}" data-t="${t}">${t} · ${t === "all" ? CLAIMS.length : CLAIMS.filter((c) => c.type === t).length}</button>`).join("");
-  document.querySelectorAll("#filters button").forEach((b) => b.onclick = () => { FILTER = b.dataset.t; document.querySelectorAll("#filters button").forEach((x) => x.classList.toggle("on", x === b)); showClaims(); });
-  showClaims();
-}
-function showClaims() {
-  const list = CLAIMS.filter((c) => FILTER === "all" || c.type === FILTER).slice(0, 400);
-  $("#claims").className = "";
-  $("#claims").innerHTML = list.map((c) => `<div class="claim"><div class="ty">${c.type.replace("_", " ")}</div>
-    <div>${esc(c.text)}<div class="src">connects: ${c.sources.map((s) => esc(s.subject) + " · " + esc(s.attribute.replace(/_/g, " "))).join("  ⟷  ")}</div></div>
-    <div class="c">${Math.round(c.confidence * 100)}%</div></div>`).join("");
-}
-
-/* ---------- how it works ---------- */
-const PRINCIPLES = [
-  ["Every sentence is a set of facts", "“Hooly Jules works in 8 languages” is the fact (Hooly Jules, programming languages, 8). Our reader parses values exactly as the referee's published rules do; a model trained on the practice rows decides which fact each value is about."],
-  ["Every fact is a staircase in time", "Prices change, teams grow. For each fact we fit its timeline over a year of pages with dynamic programming: a lone lie is outvoted, a real change repeated by later pages becomes a new step."],
-  ["Lies have three shapes", "Invented (never true), stale (true before), premature (true only later). The evidence board shows which, on the fact's own timeline."],
-  ["Sources earn trust", "Some pages are rumour mills. Each page's trust is learned from how well it agrees with the timelines, and feeds back into them — truth discovery, EM-style."],
-  ["Labels are anchors, not answers", "The 1,900 labelled rows pin the timelines and train the judge. Every training feature is computed out of fold, so the model learns on exactly what it sees for a new row."],
-  ["No LLM at run time", "Rules, dynamic programming and two small gradient-boosted models: explainable, offline, 20,000 rows in about two minutes on 2 CPUs."],
-  ["Claims are proven before they ship", "1,000 claims are built from confirmed timeline steps, then read back by our clone of the referee. 985 of 1,000 check out as true on held-out data, 0 rejected."],
-];
-$("#principles").innerHTML = PRINCIPLES.map(([h, p]) => `<div class="card"><h3>${h}</h3><p>${p}</p></div>`).join("");
-
-/* ---------- wiring ---------- */
-document.querySelectorAll("nav button").forEach((b) => b.onclick = () => {
-  document.querySelectorAll("nav button").forEach((x) => x.classList.toggle("on", x === b));
-  document.querySelectorAll("section").forEach((s) => s.classList.toggle("on", s.id === "tab-" + b.dataset.tab));
-  if (b.dataset.tab === "claims") loadClaims();
-});
-$("#runBtn").onclick = run;
-$("#loadDemo").onclick = () => $("#input").value = DEMO.join("\n");
-$("#loadSample").onclick = async () => {
-  const j = await (await fetch(API + "/api/sample")).json();
-  if (!j.rows.length) { $("#input").value = ""; $("#input").placeholder = j.note || "No sample yet."; return; }
-  $("#input").value = j.rows.map((r) => `${r.date} | ${r.text}`).join("\n");
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const STEP_TEXT = {
+  build: "docker build, from the Dockerfile in our repository",
+  prepare: "the practice rows with every 5th label hidden, plus the lexicon",
+  run: "offline · read-only · user 10001 · 2 CPUs · 6 GB · 30-minute limit",
+  check: "the organisers' checker, then our labels against the hidden ones",
 };
-async function health() {
-  try { const h = await (await fetch(API + "/api/health")).json();
-    $("#dot").classList.toggle("ok", !!h.warm);
-    $("#statusText").textContent = h.warm ? "engine ready" : "engine warming up (about a minute)…";
-    if (!h.warm) setTimeout(health, 3000);
-  } catch { $("#statusText").textContent = "API offline — start: uvicorn server.app:app --port 8000"; setTimeout(health, 4000); }
+const pct = x => (x * 100).toFixed(1) + "%";
+
+/* ---- progress ------------------------------------------------------------------------ */
+let polling = null, full = null;
+function drawSteps(s) {
+  $("#steps").innerHTML = s.steps.map((st, i) => {
+    const icon = st.status === "done" ? "✓" : st.status === "failed" ? "!" : st.status === "running" ? "" : i + 1;
+    const state = st.status === "done" ? (st.seconds != null ? `Done in ${st.seconds} s` : "Done")
+      : st.status === "running" ? "Running…" : st.status === "failed" ? "Failed" : "Waiting";
+    return `<li class="${st.status}"><span class="icon">${icon}</span>
+      <div><div class="what">${esc(st.name)}</div><div class="detail">${STEP_TEXT[st.id]}</div></div>
+      <span class="state">${state}</span></li>`;
+  }).join("");
+  $("#elapsed").textContent = s.elapsed != null ? `Elapsed: ${Math.round(s.elapsed)} s` : "";
+  $("#memory").textContent = s.peak_mb ? `Peak memory: ${s.peak_mb} MB of 6,144` : "";
+  $("#progressSub").textContent = s.state === "running" ? "Running. You can watch the log below."
+    : s.state === "done" ? "Finished." : s.state === "failed" ? "The run stopped." : "Nothing has run yet.";
+  $("#log").textContent = s.log.length ? s.log.join("\n") : "No log yet.";
+  const err = $("#error");
+  err.style.display = s.error ? "block" : "none"; err.textContent = s.error || "";
+  $("#start").disabled = s.state === "running" || !s.docker;
+  $("#dockerWarn").style.display = s.docker ? "none" : "block";
+  const sampleBox = $("#sample");
+  sampleBox.disabled = !s.sample_available;
+  sampleBox.parentElement.title = s.sample_available ? "" : "sample/sample.csv is published at 09:00 on 29 October";
 }
-drawDiagram(); health();
-$("#input").value = DEMO.join("\n");
+
+async function poll() {
+  const s = await (await fetch("/api/live/status")).json();
+  drawSteps(s);
+  if (s.state === "running") return;
+  clearInterval(polling); polling = null;
+  if (s.has_result) showResults(await (await fetch("/api/live/status?full=1")).json());
+}
+
+$("#start").onclick = async () => {
+  $("#results").style.display = "none";
+  const r = await fetch("/api/live/start", { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sample: $("#sample").checked }) });
+  if (!r.ok) { alert(await r.text()); return; }
+  drawSteps(await r.json());
+  if (!polling) polling = setInterval(poll, 1000);
+  $("#progressCard").scrollIntoView({ behavior: "smooth", block: "start" });
+};
+
+/* ---- results -------------------------------------------------------------------------- */
+let rowFilter = "all", rowLimit = 60, claimFilter = "all", claimLimit = 60;
+function showResults(s) {
+  const r = s.result; full = r;
+  $("#results").style.display = "block";
+  $("#resultsSub").textContent = `Run finished at ${r.finished}. ${r.labels_written.toLocaleString()} sentences labelled` +
+    (r.with_sample ? ", including the sample." : ".");
+  $("#numbers").innerHTML = `
+    <div><b>${r.accuracy != null ? pct(r.accuracy) : "–"}</b><span>labels correct</span>
+      <small>${r.right} of ${r.scored} hidden labels · “everything true” scores ${r.all_true_baseline != null ? pct(r.all_true_baseline) : "–"}</small></div>
+    <div><b>${r.lies_caught} / ${r.lies}</b><span>lies caught</span><small>${r.true_flagged} true sentences wrongly called false</small></div>
+    <div><b>${r.claims_count.toLocaleString()}</b><span>new claims</span>
+      <small>${Object.entries(r.claim_types).map(([k, v]) => `${v} ${k.replace("_", " ")}`).join(" · ")}</small></div>
+    <div><b>${Math.round(r.seconds)} s</b><span>container run time</span><small>peak memory ${r.peak_mb} MB of 6,144</small></div>`;
+  const b = $("#checkBadge");
+  b.className = "badge " + (r.passed ? "pass" : "fail"); b.textContent = r.passed ? "passed" : "problems found";
+  $("#checker").textContent = r.checker;
+  const types = ["all", ...Object.keys(r.claim_types)];
+  $("#claimFilters").innerHTML = types.map(t => `<button data-f="${t}" class="${t === claimFilter ? "on" : ""}">${t === "all" ? "All" : t.replace("_", " ")}</button>`).join("");
+  $("#claimFilters").querySelectorAll("button").forEach(x => x.onclick = () => {
+    claimFilter = x.dataset.f; claimLimit = 60;
+    $("#claimFilters").querySelectorAll("button").forEach(y => y.classList.toggle("on", y === x)); drawClaims(); });
+  drawRows(); drawClaims();
+}
+function drawRows() {
+  const q = $("#rowSearch").value.trim().toLowerCase();
+  const rows = full.rows.filter(r =>
+    (rowFilter === "all" || (rowFilter === "right" && r.truth && r.label === r.truth) || (rowFilter === "wrong" && r.truth && r.label !== r.truth)
+      || (rowFilter === "false" && r.label === "false") || (rowFilter === "sample" && r.sample))
+    && (!q || r.text.toLowerCase().includes(q)));
+  $("#rowBody").innerHTML = rows.slice(0, rowLimit).map(r => `<tr>
+    <td>${esc(r.text)}<span class="date">${esc(r.date)} · ${esc(r.id)}</span></td>
+    <td><span class="pill ${r.label}">${r.label}</span></td>
+    <td class="conf">${r.confidence ? Math.round(r.confidence * 100) + "%" : "–"}</td>
+    <td>${r.truth ? `<span class="pill ${r.truth}">${r.truth}</span>` : '<span class="note">sample</span>'}</td>
+    <td>${!r.truth ? "" : r.label === r.truth ? '<span class="ok">✓</span>' : '<span class="no">✗</span>'}</td></tr>`).join("")
+    || `<tr><td colspan="5" class="note">No sentences match.</td></tr>`;
+  $("#rowMore").style.display = rows.length > rowLimit ? "inline-flex" : "none";
+  $("#rowMore").textContent = `Show more (${rows.length - rowLimit} left)`;
+}
+function drawClaims() {
+  const cs = full.claims.filter(c => claimFilter === "all" || c.type === claimFilter);
+  $("#claimBody").innerHTML = cs.slice(0, claimLimit).map(c => `<tr><td><span class="note">${esc(c.type.replace("_", " "))}</span></td>
+    <td>${esc(c.text)}</td><td class="conf">${Math.round(c.confidence * 100)}%</td></tr>`).join("");
+  $("#claimMore").style.display = cs.length > claimLimit ? "inline-flex" : "none";
+  $("#claimMore").textContent = `Show more (${cs.length - claimLimit} left)`;
+}
+$("#rowFilters").querySelectorAll("button").forEach(x => x.onclick = () => {
+  rowFilter = x.dataset.f; rowLimit = 60;
+  $("#rowFilters").querySelectorAll("button").forEach(y => y.classList.toggle("on", y === x)); drawRows(); });
+$("#rowSearch").oninput = () => { rowLimit = 60; drawRows(); };
+$("#rowMore").onclick = () => { rowLimit += 100; drawRows(); };
+$("#claimMore").onclick = () => { claimLimit += 100; drawClaims(); };
+document.querySelectorAll(".tabs button").forEach(t => t.onclick = () => {
+  document.querySelectorAll(".tabs button").forEach(x => x.classList.toggle("on", x === t));
+  $("#rowsView").style.display = t.dataset.tab === "rows" ? "block" : "none";
+  $("#claimsView").style.display = t.dataset.tab === "claims" ? "block" : "none";
+});
+
+/* ---- one sentence --------------------------------------------------------------------- */
+const STATUS = { agrees: "holds on this date", stale: "was true before this date, not on it", premature: "only becomes true later",
+  invented: "is never true on its timeline", unknown: "has no other evidence" };
+function value(v) {
+  if (!v) return "";
+  const n = x => typeof x === "number" ? x.toLocaleString("en-US") : x, cur = { EUR: "€", USD: "$", GBP: "£" };
+  if (v.kind === "money") return `${cur[v.currency] || v.currency + " "}${n(v.value)}${v.per ? " per " + v.per : ""}`;
+  if (v.kind === "quantity" || v.kind === "duration") return `${n(v.value)} ${v.unit}`;
+  if (v.kind === "percent") return `${n(v.value)}%`;
+  if (v.kind === "boolean") return v.value ? "yes" : "no";
+  return String(v.value);
+}
+$("#oneGo").onclick = async () => {
+  const box = $("#answer"); box.style.display = "block"; box.innerHTML = '<span class="note">Checking… (the first check after starting the server takes about a minute)</span>';
+  try {
+    const r = await (await fetch("/api/run", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rows: [{ id: "one", date: $("#oneDate").value, text: $("#oneText").value }] }) })).json();
+    const row = r.rows[0];
+    box.innerHTML = `<div><span class="pill ${row.verdict}">${row.verdict}</span>
+      ${row.confidence ? `<span class="conf" style="margin-left:8px">${Math.round(row.confidence * 100)}% sure</span>` : ""}</div>
+      <p style="margin:10px 0 0">${esc(row.why)}</p>
+      ${row.facts.length ? `<ul>${row.facts.map(f => `<li><strong>${esc(f.subject)}</strong> · ${esc(f.attribute.replace(/_/g, " "))}
+        = ${esc(value(f.value))}: ${STATUS[f.status] || f.status}</li>`).join("")}</ul>` : '<p class="note">No fact found in this sentence.</p>'}`;
+  } catch (e) { box.innerHTML = `<span class="no">Could not check: ${esc(e.message)}</span>`; }
+};
+
+poll();
 </script>
 </body>
 </html>

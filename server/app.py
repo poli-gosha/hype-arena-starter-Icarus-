@@ -10,6 +10,10 @@ Endpoints (contract in docs/BRIEF_frontend.md):
                              returns the trace JSON for just these rows
   GET  /api/sample        -> the rows of sample/sample.csv (from 09:00 on 29 Oct), if present
   GET  /api/claims        -> the 1,000 claims the system writes on the practice universe
+  POST /api/live/start    -> body {"sample": false}: build our Docker image and run it like the
+                             judges' check, in the background (server/live.py)
+  GET  /api/live/status   -> its steps, log and, when done, the results
+  GET  /api/live/output.csv -> the table the container wrote
 The site at / is web/dist (a built UI) if it exists, else server/static: index.html is the
 immersive story of one statement, console.html the live console that runs the system.
 """
@@ -20,7 +24,8 @@ import sys
 from functools import lru_cache
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -32,9 +37,20 @@ from polygraph import pipeline  # noqa: E402
 from polygraph.lexicon import Lexicon  # noqa: E402
 from polygraph.model import Row  # noqa: E402
 from polygraph.trace import to_trace  # noqa: E402
+from server.live import JOB, RUN  # noqa: E402
 
 app = FastAPI(title="Polygraph")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+
+@app.middleware("http")
+async def fresh_pages(request, call_next):
+    """Pages are re-checked on every load, so a changed page never shows an old copy."""
+    response = await call_next(request)
+    path = request.url.path
+    if path == "/" or path.endswith(".html"):
+        response.headers["Cache-Control"] = "no-cache"
+    return response
 
 STAGES = [
     {"id": "reader", "name": "Reader", "what": "Reads every value as the referee does: money, counts, dates, versions, yes/no"},
@@ -133,6 +149,35 @@ def _claims():
 @app.get("/api/claims")
 def claims():
     return {"claims": _claims()}
+
+
+class LiveRequest(BaseModel):
+    sample: bool = False
+
+
+@app.post("/api/live/start")
+def live_start(req: LiveRequest):
+    if not JOB.start(req.sample):
+        raise HTTPException(409, "a run is already in progress")
+    return JOB.status()
+
+
+@app.get("/api/live/status")
+def live_status(full: bool = False):
+    s = JOB.status()
+    if full and JOB.result:
+        s["result"] = JOB.result
+    elif JOB.result:
+        s["result"] = {k: v for k, v in JOB.result.items() if k not in ("rows", "claims")}
+    return s
+
+
+@app.get("/api/live/output.csv")
+def live_output():
+    path = RUN / "output" / "output.csv"
+    if not path.exists():
+        raise HTTPException(404, "no run has finished yet")
+    return FileResponse(path, media_type="text/csv", filename="output.csv")
 
 
 # the frontend teammate's built UI if there is one, else our own console (server/static)
