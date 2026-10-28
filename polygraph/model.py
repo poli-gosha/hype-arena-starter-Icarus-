@@ -49,6 +49,8 @@ class Step:
     support: int = 1  # how many mentions back it
     last_seen: Optional[str] = None  # date of its last mention: between last_seen and the
     # next step's start, we don't know exactly when the value changed
+    anchors: int = 0  # how many labelled-true rows confirm it
+    dissent: int = 0  # mentions on its dates that disagree (outvoted lies or slips)
 
 
 @dataclass

@@ -98,8 +98,10 @@ def validate(claim: Claim, lex: Lexicon, input_texts: set[str] | None = None) ->
             why.append(f"time words {tw}")
     if NEGATION.search(text) and not _is_boolean(claim):
         why.append("negation")
-    if reader.IMPLEMENTED:
-        pass  # TODO(forge): read the text back with reader.parse_values and check the values
+    if reader.IMPLEMENTED and not why:
+        # read the text back the way the referee does (polygraph/referee.py)
+        from .referee import text_problems
+        why += text_problems(claim, lex)
     return why
 
 

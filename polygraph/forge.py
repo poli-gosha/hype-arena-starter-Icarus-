@@ -33,17 +33,47 @@ def _words_ok(attribute: str, allow_digits: bool = True) -> bool:
 
 
 def _step_conf(step: Step) -> float:
-    """How sure we are of a stair: anchored by a labelled row, or backed by many mentions."""
-    return min(0.99, max(step.confidence, 0.6 + 0.08 * step.support))
+    """How sure we are of a stair: confirmed by labelled rows, or backed by agreeing rows
+    with little dissent. 0 means: never build a claim on it."""
+    if step.anchors:
+        return min(0.99, 0.93 + 0.02 * step.anchors) if not step.dissent else 0.9
+    if step.support >= 3 and step.dissent * 3 <= step.support:
+        return min(0.9, 0.7 + 0.04 * step.support)
+    return 0.0
+
+
+def _precise(kb: KB, key: tuple, v: dict) -> dict | None:
+    """A date as precisely as any row gives it: the referee compares dates as written, so
+    "November 2025" is false when the truth is 4 November 2025. None: only a year is known
+    while some row gives more (too vague to claim)."""
+    if v.get("kind") != "date":
+        return v
+    best = str(v["value"])
+    for m in kb.mentions.get(key, []):
+        mv = m["value"]
+        if mv.get("kind") == "date" and mv.get("op", "eq") == "eq" and str(mv["value"]).startswith(best[:7] if len(best) >= 7 else best):
+            if len(str(mv["value"])) > len(best) and str(mv["value"]).startswith(best):
+                best = str(mv["value"])
+    if len(best) < 10:
+        return None  # a month or a year alone: too easy to be wrong
+    return {**v, "value": best}
+
+
+def _covers(step: Step, day: str) -> bool:
+    """Observations actually bracket the day: the stair was seen on or before it, and
+    seen again (or replaced) on or after it."""
+    return step.start <= day and ((step.last_seen or step.start) >= day or (step.end is not None and day < step.end))
 
 
 # ---- fact ------------------------------------------------------------------------------
 def fact_claims(kb: KB) -> Iterator[Claim]:
     for (subj, attr) in kb.facts():
         step = kb.current(subj, attr)
-        if step is None or not _words_ok(attr):
+        if step is None or not _words_ok(attr) or not _step_conf(step):
             continue
-        v = step.value
+        v = _precise(kb, (subj, attr), step.value)
+        if v is None or (v["kind"] == "boolean" and not step.anchors):
+            continue
         if v["kind"] == "boolean":
             words = attribute_words(attr)
             text = f"{subj} has {words}." if v["value"] else f"{subj} does not have {words}."
@@ -77,7 +107,7 @@ def compare_claims(kb: KB) -> Iterator[Claim]:
     groups: dict[tuple, list] = {}
     for (subj, attr) in kb.facts():
         step = kb.current(subj, attr)
-        if step is None or not _words_ok(attr, allow_digits=False):
+        if step is None or not _words_ok(attr, allow_digits=False) or not _step_conf(step):
             continue
         a = _amount(step.value)
         if a is not None:
@@ -105,32 +135,37 @@ def change_claims(kb: KB) -> Iterator[Claim]:
         if not _words_ok(attr):
             continue
         for a, b in zip(steps, steps[1:]):
-            if a.value["kind"] == "boolean":
+            if a.value["kind"] == "boolean" or not _step_conf(a) or not _step_conf(b):
                 continue
-            ra, rb = render(a.value), render(b.value)
+            va, vb = _precise(kb, (subj, attr), a.value), _precise(kb, (subj, attr), b.value)
+            if va is None or vb is None or va == vb:
+                continue
+            ra, rb = render(va), render(vb)
             if ra is None or rb is None:
                 continue
             text = f"The {attribute_words(attr)} of {subj} went from {ra} to {rb}."
-            form = {"subject": subj, "attribute": attr, "from": a.value, "to": b.value}
+            form = {"subject": subj, "attribute": attr, "from": va, "to": vb}
             yield Claim("", "change", text, form, min(_step_conf(a), _step_conf(b)) * 0.95,
                         [{"subject": subj, "attribute": attr}])
 
 
 # ---- at_event --------------------------------------------------------------------------
 def at_event_claims(kb: KB) -> Iterator[Claim]:
-    events = {e: d for e, d in kb.events.items() if len(d) == 10}
+    # only events that already happened: a value at a future event is a guess
+    events = {e: d for e, d in kb.events.items() if len(d) == 10 and d <= AS_OF}
     for (subj, attr) in kb.facts():
         if not _words_ok(attr) or kb.lexicon.is_event(subj):
             continue
         for event, day in events.items():
             step = kb.value_on(subj, attr, day)
-            if step is None or step.value["kind"] == "boolean":
+            if step is None or step.value["kind"] == "boolean" or not _step_conf(step) or not _covers(step, day):
                 continue
-            r = render(step.value)
+            v = _precise(kb, (subj, attr), step.value)
+            r = render(v) if v is not None else None
             if r is None:
                 continue
             text = f"The {attribute_words(attr)} of {subj} was {r} at {event}."
-            form = {"subject": subj, "attribute": attr, "event": event, "value": step.value}
+            form = {"subject": subj, "attribute": attr, "event": event, "value": v}
             yield Claim("", "at_event", text, form, _step_conf(step) * 0.9,
                         [{"subject": subj, "attribute": attr}, {"subject": event, "attribute": "date"}])
 
@@ -141,30 +176,37 @@ def relation_claims(kb: KB) -> Iterator[Claim]:
         if not _words_ok(link):
             continue
         for ls in lsteps:
+            if not _step_conf(ls):
+                continue
             target = kb.lexicon.canonical(ls.value["value"])
             for attr in kb.lexicon.attributes(target):
                 if not _words_ok(attr):
                     continue
                 for ts in kb.timeline(target, attr):
                     overlaps = ts.start < (ls.end or "9999") and ls.start < (ts.end or "9999")
-                    if not overlaps or ts.value["kind"] == "boolean":
+                    if not overlaps or ts.value["kind"] == "boolean" or not _step_conf(ts):
                         continue
-                    r = render(ts.value)
+                    v = _precise(kb, (target, attr), ts.value)
+                    r = render(v) if v is not None else None
                     if r is None:
                         continue
                     text = f"The {attribute_words(attr)} of the {attribute_words(link)} of {subj} is {r}."
-                    form = {"subject": subj, "link": link, "target": target, "attribute": attr, "value": ts.value}
+                    form = {"subject": subj, "link": link, "target": target, "attribute": attr, "value": v}
                     yield Claim("", "relation", text, form, min(_step_conf(ls), _step_conf(ts)) * 0.9,
                                 [{"subject": subj, "attribute": link}, {"subject": target, "attribute": attr}])
 
 
 GENERATORS = {"fact": fact_claims, "compare": compare_claims, "change": change_claims,
               "at_event": at_event_claims, "relation": relation_claims}
-# how many of the 1,000 each type may take at most, before topping up with the rest
-QUOTA = {"fact": 350, "relation": 150, "at_event": 150, "change": 150, "compare": 400}
+# each type's share of the 1,000 (sums to 1,000): claims that connect facts (relation,
+# at_event, change, compare) are the point of the challenge; a type that falls short leaves
+# its slots to the most confident leftovers of the others
+QUOTA = {"fact": 250, "relation": 150, "at_event": 150, "change": 150, "compare": 300}
 
 
 def generate(kb: KB, input_texts: set[str], n: int = N_CLAIMS) -> list[Claim]:
+    # the referee clone needs each fact's kind to know which compare phrases apply
+    kb.lexicon._kinds = {key: steps[-1].value.get("kind") for key, steps in kb.timelines.items() if steps}
     seen_text: set[str] = set()
     pools: dict[str, list[Claim]] = {}
     for t, gen in GENERATORS.items():
@@ -183,8 +225,7 @@ def generate(kb: KB, input_texts: set[str], n: int = N_CLAIMS) -> list[Claim]:
         chosen += pool[:QUOTA[t]]
     rest = sorted((c for t, p in pools.items() for c in p[QUOTA[t]:]), key=lambda c: -c.confidence)
     chosen += rest[: max(0, n - len(chosen))]
-    chosen.sort(key=lambda c: -c.confidence)
-    chosen = chosen[:n]
+    chosen = sorted(chosen, key=lambda c: -c.confidence)[:n]
     for i, c in enumerate(chosen, 1):
         c.id = f"c{i:04d}-{c.type}"
     return chosen

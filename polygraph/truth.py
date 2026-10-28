@@ -103,15 +103,18 @@ def _steps(on_date: dict[str, str], ms: list[Mention]) -> list[Step]:
         k = on_date[d]
         agree = sum(1 for m in ms if m.date == d and m.key == k and m.anchor >= 0)
         anchors = sum(1 for m in ms if m.date == d and m.key == k and m.anchor > 0)
+        dissent = sum(1 for m in ms if m.date == d and m.key != k and m.anchor == 0)
         if steps and value_key(steps[-1].value) == k:
             s = steps[-1]
             s.support += agree
             s.last_seen = d
             s.confidence = max(s.confidence, 1.0 if anchors else 0.0)
+            s.anchors += anchors
+            s.dissent += dissent
             continue
         if steps:
             steps[-1].end = d
-        steps.append(Step(d, None, value_of[k], 1.0 if anchors else 0.0, agree, d))
+        steps.append(Step(d, None, value_of[k], 1.0 if anchors else 0.0, agree, d, anchors, dissent))
     for s in steps:  # confidence: anchored, or by how many mentions back it
         s.confidence = 1.0 if s.confidence == 1.0 else min(0.97, 0.55 + 0.1 * s.support)
     return steps
