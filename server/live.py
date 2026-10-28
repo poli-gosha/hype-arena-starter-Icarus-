@@ -9,7 +9,9 @@ Steps, in a background thread:
   4. check    the organisers' own checker (scripts/check_output.py), then our labels on the
               hidden rows scored against the practice labels
 
-The container's real /output/output.csv is kept for download.
+The container's real /output/output.csv is kept for download, and the container itself is
+kept (stopped) until the next run, so anyone can check it in Docker Desktop or with
+`docker ps -a --filter name=polygraph-live`. Its settings are read back from Docker.
 """
 from __future__ import annotations
 
@@ -60,6 +62,8 @@ class Job:
         self.result = None
         self.started = None
         self.peak_mb = 0.0
+        self.container = None
+        self.image = None
 
     def say(self, line: str):
         line = line.rstrip()
@@ -71,6 +75,7 @@ class Job:
         return {"state": self.state, "steps": self.steps, "log": self.log[-60:], "error": self.error,
                 "elapsed": round(time.time() - self.started, 1) if self.started and self.state == "running" else None,
                 "peak_mb": round(self.peak_mb), "has_result": self.result is not None,
+                "container": self.container, "image": self.image,
                 "docker": docker_exe() is not None, "sample_available": (ROOT / "sample" / "sample.csv").exists()}
 
     def start(self, with_sample: bool) -> bool:
@@ -110,6 +115,11 @@ class Job:
                 self.say(line)
             if p.wait() != 0:
                 raise RuntimeError("The image did not build; see the log.")
+            img = subprocess.run([docker, "image", "inspect", IMAGE, "--format", "{{.Id}}|{{.Created}}|{{.Size}}"],
+                                 capture_output=True, text=True).stdout.strip().split("|")
+            self.image = {"name": IMAGE, "id": img[0], "created": img[1][:19].replace("T", " ") if len(img) > 1 else "",
+                          "size_mb": round(int(img[2]) / 1e6) if len(img) > 2 and img[2].isdigit() else None}
+            self.say(f"image {IMAGE}: {img[0][:19]}")
             self._step("build", "done", time.time() - t)
 
             current = "prepare"
@@ -134,6 +144,9 @@ class Job:
             current = "run"
             t = time.time(); self._step("run", "running")
             name = f"polygraph-live-{int(t)}"
+            old = subprocess.run([docker, "ps", "-aq", "--filter", "name=polygraph-live-"], capture_output=True, text=True).stdout.split()
+            if old:  # only the latest run's container is kept
+                subprocess.run([docker, "rm", "-f", *old], capture_output=True)
             deadline = int(t) + 1800
             cmd = [docker, "run", "-d", "--name", name, "--platform", "linux/amd64", "--network", "none", "--read-only",
                    "--user", "10001:10001", "--cpus", "2", "--memory", "6g", "--memory-swap", "6g", "--pids-limit", "256",
@@ -142,31 +155,43 @@ class Job:
                    "--mount", f"type=bind,source={out},target=/output",
                    "-e", f"ARENA_DEADLINE={deadline}", IMAGE]
             self.say("$ docker run --network none --read-only --user 10001 --cpus 2 --memory 6g ... " + IMAGE)
-            subprocess.run(cmd, capture_output=True, text=True, check=True)
+            cid = subprocess.run(cmd, capture_output=True, text=True, check=True).stdout.strip()
+            self.container = {"name": name, "id": cid}
+            self.say(f"container {name}: {cid[:12]}")
+            # what Docker itself says this container runs with
+            fmt = ("{{.Config.User}}|{{.HostConfig.NetworkMode}}|{{.HostConfig.ReadonlyRootfs}}|{{.HostConfig.NanoCpus}}|"
+                   "{{.HostConfig.Memory}}|{{.HostConfig.PidsLimit}}|{{.Config.Image}}|{{.Image}}")
+            f = subprocess.run([docker, "inspect", "-f", fmt, name], capture_output=True, text=True).stdout.strip().split("|")
+            settings = {"user": f[0], "network": f[1], "read_only": f[2] == "true",
+                        "cpus": round(int(f[3]) / 1e9, 2) if f[3].isdigit() else f[3],
+                        "memory_gb": round(int(f[4]) / 1024 ** 3, 2) if f[4].isdigit() else f[4],
+                        "pids_limit": f[5], "image_name": f[6], "image_id": f[7]}
+            self.container["settings"] = settings
+            self.say("docker inspect: user {user}, network {network}, read-only {read_only}, cpus {cpus}, "
+                     "memory {memory_gb} GiB, pids {pids_limit}".format(**settings))
             seen = 0
-            try:
-                while True:
-                    state = subprocess.run([docker, "inspect", "-f", "{{.State.Running}}", name], capture_output=True, text=True)
-                    logs = subprocess.run([docker, "logs", name], capture_output=True, text=True, encoding="utf-8", errors="replace")
-                    lines = (logs.stdout + logs.stderr).splitlines()
-                    for line in lines[seen:]:
-                        self.say("  | " + line)
-                    seen = len(lines)
-                    mem = subprocess.run([docker, "stats", "--no-stream", "--format", "{{.MemUsage}}", name],
-                                         capture_output=True, text=True).stdout
-                    self.peak_mb = max(self.peak_mb, _mib(mem))
-                    if state.stdout.strip() != "true":
-                        break
-                    if time.time() > deadline:
-                        self.say("deadline: stopping the container")
-                        subprocess.run([docker, "stop", "-t", "10", name], capture_output=True)
-                        break
-                    time.sleep(1.5)
-                code = subprocess.run([docker, "inspect", "-f", "{{.State.ExitCode}} {{.State.OOMKilled}}", name],
-                                      capture_output=True, text=True).stdout.split()
-            finally:
-                subprocess.run([docker, "rm", "-f", name], capture_output=True)
+            while True:
+                state = subprocess.run([docker, "inspect", "-f", "{{.State.Running}}", name], capture_output=True, text=True)
+                logs = subprocess.run([docker, "logs", name], capture_output=True, text=True, encoding="utf-8", errors="replace")
+                lines = (logs.stdout + logs.stderr).splitlines()
+                for line in lines[seen:]:
+                    self.say("  | " + line)
+                seen = len(lines)
+                mem = subprocess.run([docker, "stats", "--no-stream", "--format", "{{.MemUsage}}", name],
+                                     capture_output=True, text=True).stdout
+                self.peak_mb = max(self.peak_mb, _mib(mem))
+                if state.stdout.strip() != "true":
+                    break
+                if time.time() > deadline:
+                    self.say("deadline: stopping the container")
+                    subprocess.run([docker, "stop", "-t", "10", name], capture_output=True)
+                    break
+                time.sleep(1.5)
+            code = subprocess.run([docker, "inspect", "-f", "{{.State.ExitCode}} {{.State.OOMKilled}}", name],
+                                  capture_output=True, text=True).stdout.split()
             run_seconds = time.time() - t
+            self.container["exit_code"] = int(code[0]) if code and code[0].lstrip("-").isdigit() else code[0]
+            self.say(f"the container is kept: docker ps -a --filter name={name}")
             self.say(f"exit code {code[0]}, out of memory: {code[1]}, peak memory {self.peak_mb:.0f} MiB")
             if code[0] != "0":
                 raise RuntimeError(f"The container exited with code {code[0]}.")
@@ -183,6 +208,7 @@ class Job:
                 self.say("checker: " + line)
             self.result = _score(uni / "universe.csv", out / "output.csv", chk.stdout, chk.returncode == 0,
                                  run_seconds, self.peak_mb, with_sample)
+            self.result["proof"] = {"image": self.image, "container": self.container}
             (RUN / "result.json").write_text(json.dumps(self.result), encoding="utf-8")
             self._step("check", "done", time.time() - t)
             self.state = "done"

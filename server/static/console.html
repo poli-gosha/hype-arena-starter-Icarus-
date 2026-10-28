@@ -90,6 +90,13 @@
   .conf { font-variant-numeric: tabular-nums; color: var(--soft); white-space: nowrap; }
   .more { margin-top: 14px; }
   #results { display: none; }
+  .proof { border: 1px solid var(--line); border-left: 4px solid var(--blue); border-radius: 10px; padding: 16px 18px; margin: 0 0 22px; }
+  .proof h3 { margin: 0 0 10px; font-size: 16px; }
+  .proof dl { display: grid; grid-template-columns: 200px 1fr; gap: 6px 16px; margin: 0; font-size: 15px; }
+  .proof dt { color: var(--soft); }
+  .proof dd { margin: 0; }
+  .proof code { background: #F3F3EE; border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; font-size: 13px; }
+  .proof .yes { color: var(--green); font-weight: 600; }
 
   /* one sentence */
   .one { display: grid; grid-template-columns: 160px 1fr auto; gap: 10px; }
@@ -141,7 +148,7 @@
     <h2><span class="n">2</span>Progress</h2>
     <p class="sub" id="progressSub">Nothing has run yet.</p>
     <ul class="steps" id="steps"></ul>
-    <div class="meta"><span id="elapsed"></span><span id="memory"></span></div>
+    <div class="meta"><span id="elapsed"></span><span id="memory"></span><span id="containerNow"></span></div>
     <div class="err" id="error"></div>
     <details><summary>Show the live log</summary><pre id="log">No log yet.</pre></details>
   </section>
@@ -151,6 +158,7 @@
     <h2><span class="n">3</span>Results</h2>
     <p class="sub" id="resultsSub"></p>
     <div class="numbers" id="numbers"></div>
+    <div class="proof" id="proof"></div>
     <div class="checker"><strong>Organisers' checker</strong><span class="badge" id="checkBadge"></span></div>
     <pre id="checker"></pre>
     <div class="actions" style="margin-top:18px">
@@ -216,6 +224,7 @@ function drawSteps(s) {
   }).join("");
   $("#elapsed").textContent = s.elapsed != null ? `Elapsed: ${Math.round(s.elapsed)} s` : "";
   $("#memory").textContent = s.peak_mb ? `Peak memory: ${s.peak_mb} MB of 6,144` : "";
+  $("#containerNow").textContent = s.container ? `Container: ${s.container.name} (${s.container.id.slice(0, 12)})` : "";
   $("#progressSub").textContent = s.state === "running" ? "Running. You can watch the log below."
     : s.state === "done" ? "Finished." : s.state === "failed" ? "The run stopped." : "Nothing has run yet.";
   $("#log").textContent = s.log.length ? s.log.join("\n") : "No log yet.";
@@ -260,6 +269,7 @@ function showResults(s) {
     <div><b>${r.claims_count.toLocaleString()}</b><span>new claims</span>
       <small>${Object.entries(r.claim_types).map(([k, v]) => `${v} ${k.replace("_", " ")}`).join(" · ")}</small></div>
     <div><b>${Math.round(r.seconds)} s</b><span>container run time</span><small>peak memory ${r.peak_mb} MB of 6,144</small></div>`;
+  drawProof(r.proof);
   const b = $("#checkBadge");
   b.className = "badge " + (r.passed ? "pass" : "fail"); b.textContent = r.passed ? "passed" : "problems found";
   $("#checker").textContent = r.checker;
@@ -269,6 +279,26 @@ function showResults(s) {
     claimFilter = x.dataset.f; claimLimit = 60;
     $("#claimFilters").querySelectorAll("button").forEach(y => y.classList.toggle("on", y === x)); drawClaims(); });
   drawRows(); drawClaims();
+}
+function drawProof(p) {
+  const box = $("#proof");
+  if (!p || !p.container) { box.style.display = "none"; return; }
+  box.style.display = "block";
+  const c = p.container, st = c.settings || {}, im = p.image || {};
+  const yes = (ok, text) => ok ? `<span class="yes">${text}</span>` : text;
+  box.innerHTML = `<h3>Proof it ran in Docker</h3><dl>
+    <dt>Image</dt><dd><code>${esc(im.name || "")}</code> · id <code>${esc((im.id || "").replace("sha256:", "").slice(0, 12))}</code>
+      · built ${esc(im.created || "")} UTC${im.size_mb ? ` · ${im.size_mb} MB` : ""}</dd>
+    <dt>Container</dt><dd><code>${esc(c.name)}</code> · id <code>${esc(c.id.slice(0, 12))}</code> · exit code ${esc(c.exit_code)}</dd>
+    <dt>Settings, read from Docker</dt><dd>
+      user ${yes(st.user === "10001:10001" || st.user === "10001", esc(st.user))} ·
+      network ${yes(st.network === "none", esc(st.network))} ·
+      read-only disk ${yes(st.read_only, st.read_only ? "yes" : "no")} ·
+      ${yes(st.cpus == 2, esc(st.cpus) + " CPUs")} ·
+      ${yes(st.memory_gb == 6, esc(st.memory_gb) + " GB memory")} ·
+      ${esc(st.pids_limit)} processes max</dd>
+    <dt>Check it yourself</dt><dd>Docker Desktop → <strong>Containers</strong>: <code>${esc(c.name)}</code> is kept, with its full log.
+      Or in a terminal: <code>docker ps -a --filter name=polygraph-live</code></dd></dl>`;
 }
 function drawRows() {
   const q = $("#rowSearch").value.trim().toLowerCase();

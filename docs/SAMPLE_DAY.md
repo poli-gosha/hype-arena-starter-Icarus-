@@ -28,11 +28,16 @@ It must end with `the format checks pass`, and `out/output/output.csv` must hold
 
 ## 09:15: record the video (deadline 11:00)
 
-1. Open http://localhost:8000 for the story of one statement (scroll through it), then click **Run it live** (http://localhost:8000/console.html).
-2. In the console, tick **Also label the 20 sample sentences**, then click **Build and run in Docker**. It builds our image and runs it exactly like the judges' check (about 2–3 minutes), shows the organisers' checker output and our score, and offers **Download output.csv**. Filter the table with **Sample rows** to show the sample's verdicts. It takes about 4 seconds; the diagram lights up and every row gets its verdict.
-2. Click two or three FALSE rows to show the evidence board. Each one has a timeline and a one-line "why".
-3. Show the **Claim Forge** tab: the 1,000 claims and their types.
-4. Keep the architecture diagram on screen throughout. The rules require it beside the run.
+1. Open http://localhost:8000 and scroll through the story of one statement (the architecture, shape by shape).
+2. Click **Run it live** (http://localhost:8000/console.html). Tick **Also label the 20 sample sentences**, then
+   **Build and run in Docker**. It builds our image and runs it exactly like the judges' check (2 to 3 minutes).
+3. **Prove it's really Docker**, on camera, while it runs: switch to Docker Desktop → **Containers**. The
+   container named on the page (`polygraph-live-…`) is there, *Running*. Its logs in Docker Desktop are the same
+   lines the page shows. (Or run `docker ps --filter name=polygraph-live` in a terminal.)
+4. Back on the page: the results, the organisers' checker output, and the **Proof it ran in Docker** panel
+   (image id, container id, and its settings read back from Docker: user 10001, no network, read-only, 2 CPUs, 6 GB).
+   Filter the sentence table with **Sample rows** to show the sample's verdicts.
+5. Click **Download output.csv** and open it: the table the container wrote.
 
 Rehearse once at 09:10 before recording.
 
