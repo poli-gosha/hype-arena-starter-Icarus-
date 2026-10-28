@@ -39,6 +39,7 @@ FALSE_CUTOFF = float(os.environ.get("POLY_CUTOFF", 0.6))
 _m = [float(x) for x in os.environ.get("POLY_MODEL", "120,0.06,7,20").split(",")]
 MODEL = {"iter": int(_m[0]), "lr": _m[1], "leaves": int(_m[2]), "min_leaf": int(_m[3])}
 STACK = os.environ.get("POLY_STACK", "1") == "1"  # the page-level second pass
+ENSEMBLE = float(os.environ.get("POLY_ENSEMBLE", 0))  # weight of a linear model averaged in (0 = off)
 BAGS = int(os.environ.get("POLY_BAGS", 1))  # models averaged over bootstrap resamples
 SELF_TRAIN = os.environ.get("POLY_SELF", "1") == "1"  # self-training: confident verdicts as weak anchors
 SOFT = float(os.environ.get("POLY_SOFT", 0.6))  # how strong such a weak anchor is (a label is 1)
@@ -508,7 +509,35 @@ def _model():
     base = HistGradientBoostingClassifier(max_iter=MODEL["iter"], learning_rate=MODEL["lr"],
                                           max_leaf_nodes=MODEL["leaves"], l2_regularization=1.0,
                                           min_samples_leaf=MODEL["min_leaf"], random_state=0)
-    return Bagged(base, BAGS) if BAGS > 1 else base
+    model = Bagged(base, BAGS) if BAGS > 1 else base
+    if ENSEMBLE:  # a linear model makes different mistakes than trees: average the two
+        from sklearn.linear_model import LogisticRegression
+        from sklearn.pipeline import make_pipeline
+        from sklearn.preprocessing import StandardScaler
+        linear = make_pipeline(StandardScaler(), LogisticRegression(C=0.5, max_iter=3000))
+        return Averaged([model, linear], [1 - ENSEMBLE, ENSEMBLE])
+    return model
+
+
+class Averaged:
+    """A weighted average of several classifiers' probabilities."""
+
+    def __init__(self, models, weights):
+        self.models, self.weights = models, weights
+
+    def fit(self, X, y):
+        self.classes_ = np.unique(y)
+        for m in self.models:
+            m.fit(X, y)
+        return self
+
+    def predict_proba(self, X):
+        out = np.zeros((len(X), len(self.classes_)))
+        for m, w in zip(self.models, self.weights):
+            p = m.predict_proba(X)
+            for j, c in enumerate(m.classes_):
+                out[:, list(self.classes_).index(c)] += w * p[:, j]
+        return out
 
 
 class Bagged:

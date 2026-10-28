@@ -28,6 +28,8 @@ def main() -> int:
     p.add_argument("--fresh", action="store_true")
     p.add_argument("--folds", type=int, default=5)
     p.add_argument("--gold", action="store_true", help="perfect extraction: the ceiling of the truth engine + judge")
+    p.add_argument("--partitions", type=int, default=1,
+                   help="2: also hide labels by a second, independent split (sturdier, twice as slow)")
     a = p.parse_args()
     if a.fresh:
         shutil.rmtree(CACHE, ignore_errors=True)
@@ -35,10 +37,16 @@ def main() -> int:
     bundle = pipeline.Bundle.load()
     truth = {r.id: r.label for r in bundle.rows}
     tot = Counter()
-    for k in range(a.folds):
-        rows = [replace(r, label="" if i % 5 == k else r.label) for i, r in enumerate(bundle.rows)]
-        res = pipeline.run(rows, lexicon, bundle, claims=False, gold_extraction=a.gold,
-                           cache=CACHE / f"{'gold' if a.gold else 'fold'}{k}.pkl")
+    import hashlib
+    runs = [(part, k) for part in range(a.partitions) for k in range(a.folds)]
+    for part, k in runs:
+        if part == 0:  # the split scripts/input.py uses: every 5th row
+            hide = lambda i, r: i % 5 == k  # noqa: E731
+        else:  # an independent split: by a hash of the row id
+            hide = lambda i, r: int(hashlib.md5(f"{part}:{r.id}".encode()).hexdigest(), 16) % 5 == k  # noqa: E731
+        rows = [replace(r, label="" if hide(i, r) else r.label) for i, r in enumerate(bundle.rows)]
+        tag = f"{'gold' if a.gold else 'fold'}{k}" + (f"-p{part}" if part else "")
+        res = pipeline.run(rows, lexicon, bundle, claims=False, gold_extraction=a.gold, cache=CACHE / f"{tag}.pkl")
         cm = Counter((truth[v.id], v.label) for v in res.verdicts)
         n = sum(cm.values())
         right = sum(c for (t, q), c in cm.items() if t == q)
@@ -47,7 +55,7 @@ def main() -> int:
         tot.update({"n": n, "right": right, "base": base, "brier": brier,
                     "fp": cm[("true", "false")], "fn": cm[("false", "true")], "caught": cm[("false", "false")],
                     "lies": sum(c for (t, _), c in cm.items() if t == "false")})
-        print(f"fold {k}: {right / n:.3f}  (all-true {base / n:.3f})  true->false {cm[('true', 'false')]:3d}  "
+        print(f"split {part} fold {k}: {right / n:.3f}  (all-true {base / n:.3f})  true->false {cm[('true', 'false')]:3d}  "
               f"false caught {cm[('false', 'false')]}/{sum(c for (t, _), c in cm.items() if t == 'false')}")
     print(f"MEAN  : {tot['right'] / tot['n']:.4f}  (all-true {tot['base'] / tot['n']:.4f})  "
           f"Brier {tot['brier'] / tot['n']:.3f}  lies caught {tot['caught']}/{tot['lies']}, true rows flagged {tot['fp']}")
