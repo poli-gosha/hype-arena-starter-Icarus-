@@ -34,7 +34,9 @@ STEPS = [("build", "Build the Docker image"), ("prepare", "Prepare the input"),
          ("run", "Run the container"), ("trace", "Trace every sentence"), ("check", "Check the output")]
 
 
-SAMPLE = ROOT / "sample" / "sample.csv"
+# the organisers published it at datasets/sample.csv (their README said sample/sample.csv)
+SAMPLE = next((p for p in (ROOT / "datasets" / "sample.csv", ROOT / "sample" / "sample.csv") if p.exists()),
+              ROOT / "datasets" / "sample.csv")
 STANDIN = ROOT / "data" / "sample_standin.csv"
 
 

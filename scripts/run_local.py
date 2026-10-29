@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 def main() -> int:
     p = argparse.ArgumentParser()
-    p.add_argument("--sample", nargs="?", const=str(ROOT / "sample" / "sample.csv"), default=None,
+    p.add_argument("--sample", nargs="?", const=str(ROOT / "datasets" / "sample.csv"), default=None,
                    help="append a sample's rows (default sample/sample.csv, published 09:00 on 29 Oct)")
     a = p.parse_args()
 

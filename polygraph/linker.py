@@ -10,6 +10,9 @@ from dataclasses import dataclass
 
 from .lexicon import Lexicon, norm
 
+# a name of two words or more also counts in lower case ("employee survey")
+LOWER_MULTIWORD = __import__("os").environ.get("POLY_LOWER_MULTI", "1") == "1"
+
 
 @dataclass
 class Mention:
@@ -73,8 +76,9 @@ class Linker:
 
     def _lower_ok(self, written: str) -> bool:
         """A lower-case spelling still names a subject when the lexicon itself writes it in
-        lower case ("next I/O", "outage", "devices division")."""
-        return norm(written) in self._lower
+        lower case ("next I/O", "outage", "devices division"), or when it is a name of two
+        words or more ("employee survey"): only a single word like "photos" is ambiguous."""
+        return norm(written) in self._lower or (LOWER_MULTIWORD and len(written.split()) >= 2)
 
     def link_page(self, texts: list[str]) -> list[list[Mention]]:
         """Mentions for each sentence of one page: its own, then every other subject the page

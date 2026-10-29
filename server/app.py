@@ -134,7 +134,8 @@ def run(req: RunRequest):
 
 @app.get("/api/sample")
 def sample():
-    path = ROOT / "sample" / "sample.csv"
+    path = next((p for p in (ROOT / "datasets" / "sample.csv", ROOT / "sample" / "sample.csv") if p.exists()),
+                ROOT / "datasets" / "sample.csv")
     if not path.exists():
         return {"rows": [], "note": "sample/sample.csv appears at 09:00 on 29 Oct"}
     with open(path, encoding="utf-8-sig", newline="") as f:
