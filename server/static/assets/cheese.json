@@ -1,0 +1,420 @@
+{
+ "pairs": [
+  [
+   {
+    "id": "p-1246",
+    "text": "Hooly Pixel 10 Pro arrives the same day at €1,049.",
+    "date": "28 Apr 2026",
+    "truth": "false",
+    "polygraph": {
+     "label": "false",
+     "confidence": 0.93
+    },
+    "kind": "premature",
+    "why": "€1,049 only becomes true later; on 28 Apr 2026 the archive holds €1,099 for Hooly Pixel 10 Pro's price."
+   },
+   {
+    "id": "p-1011",
+    "text": "Attachments of 20 MB go through without a fuss.",
+    "date": "19 Nov 2025",
+    "truth": "true",
+    "polygraph": {
+     "label": "true",
+     "confidence": 0.98
+    },
+    "kind": "true",
+    "why": "The archive holds 20 MB for Hooly Gmail's attachment limit on 19 Nov 2025."
+   }
+  ],
+  [
+   {
+    "id": "p-1261",
+    "text": "Hooly Pixel 10 runs Hooly Android 17.0 out of the box.",
+    "date": "14 May 2026",
+    "truth": "false",
+    "polygraph": {
+     "label": "false",
+     "confidence": 0.7
+    },
+    "kind": "premature",
+    "why": "version 17.0 only becomes true later; on 14 May 2026 the archive holds version 16.1 for Hooly Android's version."
+   },
+   {
+    "id": "p-1286",
+    "text": "Hooly Gmail counts 21,000 users and Hooly Drive 24,600 users this month.",
+    "date": "1 Sep 2026",
+    "truth": "true",
+    "polygraph": {
+     "label": "true",
+     "confidence": 0.99
+    },
+    "kind": "true",
+    "why": "The archive holds 24,600 users for Hooly Drive's active users on 1 Sep 2026."
+   }
+  ],
+  [
+   {
+    "id": "p-611",
+    "text": "Hooly Pixel Fold starts at 256 GB.",
+    "date": "18 Aug 2026",
+    "truth": "true",
+    "polygraph": {
+     "label": "true",
+     "confidence": 0.97
+    },
+    "kind": "true",
+    "why": "The archive holds 256 GB for Hooly Pixel Fold's base storage on 18 Aug 2026."
+   },
+   {
+    "id": "p-181",
+    "text": "9 roles stand open at the Hooly Hiring Programme.",
+    "date": "18 Jun 2026",
+    "truth": "false",
+    "polygraph": {
+     "label": "false",
+     "confidence": 0.74
+    },
+    "kind": "stale",
+    "why": "9 roles was true earlier; on 18 Jun 2026 the archive holds 14 roles for Hooly Hiring Programme's open roles."
+   }
+  ],
+  [
+   {
+    "id": "p-1116",
+    "text": "150 employees are already in, sipping espresso.",
+    "date": "6 May 2026",
+    "truth": "false",
+    "polygraph": {
+     "label": "false",
+     "confidence": 0.78
+    },
+    "kind": "invented",
+    "why": "No document ever gives 150 employees for Hooly's employees; on 6 May 2026 it is 74 employees."
+   },
+   {
+    "id": "p-556",
+    "text": "The library holds 4,900,000,000 photos items across accounts.",
+    "date": "10 Feb 2026",
+    "truth": "true",
+    "polygraph": {
+     "label": "true",
+     "confidence": 0.95
+    },
+    "kind": "true",
+    "why": "The archive holds 4,900,000,000 photos for Hooly Photos's photos stored on 10 Feb 2026."
+   }
+  ],
+  [
+   {
+    "id": "p-186",
+    "text": "Referrals deliver 31% of new joiners.",
+    "date": "18 Jun 2026",
+    "truth": "true",
+    "polygraph": {
+     "label": "true",
+     "confidence": 0.98
+    },
+    "kind": "true",
+    "why": "The archive holds 31% for Hooly Hiring Programme's referral share on 18 Jun 2026."
+   },
+   {
+    "id": "p-126",
+    "text": "Nelson Bighettie thanked every tester in a note to the group.",
+    "date": "2 Jul 2026",
+    "truth": "false",
+    "polygraph": {
+     "label": "true",
+     "confidence": 0.66
+    },
+    "kind": "missed",
+    "why": "The labelled data says this is false. Polygraph missed it: it doesn't catch every lie."
+   }
+  ],
+  [
+   {
+    "id": "p-1086",
+    "text": "Hooly starts the year with 38 employees and 1,000 customers.",
+    "date": "5 Jan 2026",
+    "truth": "false",
+    "polygraph": {
+     "label": "false",
+     "confidence": 0.93
+    },
+    "kind": "premature",
+    "why": "1,000 customers only becomes true later; on 5 Jan 2026 the archive holds 400 customers for Hooly's paying customers."
+   },
+   {
+    "id": "p-866",
+    "text": "Gavin: We are 74 employees and we serve 1,800 customers.",
+    "date": "10 Jun 2026",
+    "truth": "true",
+    "polygraph": {
+     "label": "true",
+     "confidence": 0.76
+    },
+    "kind": "true",
+    "why": "The archive holds 74 employees for Hooly's employees on 10 Jun 2026."
+   }
+  ],
+  [
+   {
+    "id": "p-146",
+    "text": "Hooly Android runs on 2,900,000,000 devices, after another quarter of growth.",
+    "date": "1 Apr 2026",
+    "truth": "false",
+    "polygraph": {
+     "label": "true",
+     "confidence": 0.99
+    },
+    "kind": "missed",
+    "why": "The labelled data says this is false. Polygraph missed it: it doesn't catch every lie."
+   },
+   {
+    "id": "p-1161",
+    "text": "The platform now has 15 zones, housed in 7 sites.",
+    "date": "2 Mar 2026",
+    "truth": "true",
+    "polygraph": {
+     "label": "true",
+     "confidence": 0.99
+    },
+    "kind": "true",
+    "why": "The archive holds 15 zones for Hooly Cloud's availability zones on 2 Mar 2026."
+   }
+  ],
+  [
+   {
+    "id": "p-1381",
+    "text": "Onboarding for Hooly Workspace Enterprise takes 21 days",
+    "date": "15 Oct 2026",
+    "truth": "false",
+    "polygraph": {
+     "label": "false",
+     "confidence": 0.88
+    },
+    "kind": "stale",
+    "why": "21 days was true earlier; on 15 Oct 2026 the archive holds 14 days for Hooly Workspace Enterprise's onboarding time."
+   },
+   {
+    "id": "p-576",
+    "text": "Hooly Search ads bring 58.9% of Hooly's revenue.",
+    "date": "20 Oct 2026",
+    "truth": "true",
+    "polygraph": {
+     "label": "true",
+     "confidence": 1.0
+    },
+    "kind": "true",
+    "why": "The archive holds 58.9% for Hooly Search's share of ad revenue on 20 Oct 2026."
+   }
+  ],
+  [
+   {
+    "id": "p-116",
+    "text": "A median query in Hooly Search takes 410 ms.",
+    "date": "22 Jan 2026",
+    "truth": "true",
+    "polygraph": {
+     "label": "true",
+     "confidence": 0.99
+    },
+    "kind": "true",
+    "why": "The archive holds 0.41 seconds for Hooly Search's median response time on 22 Jan 2026."
+   },
+   {
+    "id": "p-1346",
+    "text": "Hooly AI Pro costs €59 per month, and Hooly AI Pro history stays for 30 days.",
+    "date": "10 Feb 2026",
+    "truth": "false",
+    "polygraph": {
+     "label": "false",
+     "confidence": 0.82
+    },
+    "kind": "premature",
+    "why": "€59 per month only becomes true later; on 10 Feb 2026 the archive holds €49 per month for Hooly AI Pro's price."
+   }
+  ],
+  [
+   {
+    "id": "p-1596",
+    "text": "Ron: Hooly is not SOC 2 certified today.",
+    "date": "26 Aug 2026",
+    "truth": "true",
+    "polygraph": {
+     "label": "true",
+     "confidence": 0.99
+    },
+    "kind": "true",
+    "why": "The archive holds False for Hooly's soc2 certified on 26 Aug 2026."
+   },
+   {
+    "id": "p-911",
+    "text": "The guest says the index of Hooly Search now holds 265,000,000,000 pages.",
+    "date": "15 Oct 2026",
+    "truth": "false",
+    "polygraph": {
+     "label": "false",
+     "confidence": 0.96
+    },
+    "kind": "stale",
+    "why": "265,000,000,000 pages was true earlier; on 15 Oct 2026 the archive holds 301,000,000,000 pages for Hooly Search's index size."
+   }
+  ],
+  [
+   {
+    "id": "p-1141",
+    "text": "Those zones run in 4 sites that Hooly leases and operates itself.",
+    "date": "4 Nov 2025",
+    "truth": "true",
+    "polygraph": {
+     "label": "true",
+     "confidence": 1.0
+    },
+    "kind": "true",
+    "why": "The archive holds 4 sites for Hooly Cloud's data centres on 4 Nov 2025."
+   },
+   {
+    "id": "p-401",
+    "text": "Hooly AI Pro starts with a free trial of 30 days",
+    "date": "10 May 2026",
+    "truth": "false",
+    "polygraph": {
+     "label": "false",
+     "confidence": 0.66
+    },
+    "kind": "invented",
+    "why": "No document ever gives 30 days for Hooly AI Pro's free trial; on 10 May 2026 it is 7 days."
+   }
+  ],
+  [
+   {
+    "id": "p-141",
+    "text": "Made by Hooly has signed 6 sponsors for the show floor.",
+    "date": "1 Apr 2026",
+    "truth": "true",
+    "polygraph": {
+     "label": "true",
+     "confidence": 0.85
+    },
+    "kind": "true",
+    "why": "The archive holds 6 sponsors for Made by Hooly 2026's sponsors on 1 Apr 2026."
+   },
+   {
+    "id": "p-1106",
+    "text": "Hooly I/O has 20 sponsors signed, and a Hooly I/O ticket is €249.",
+    "date": "2 Feb 2026",
+    "truth": "false",
+    "polygraph": {
+     "label": "false",
+     "confidence": 0.92
+    },
+    "kind": "invented",
+    "why": "No document ever gives 20 sponsors for Hooly I/O 2026's sponsors; on 2 Feb 2026 it is 9 sponsors."
+   }
+  ],
+  [
+   {
+    "id": "p-1396",
+    "text": "Hooly employs 12 employees and serves 1,800 customers",
+    "date": "12 May 2026",
+    "truth": "false",
+    "polygraph": {
+     "label": "false",
+     "confidence": 0.87
+    },
+    "kind": "invented",
+    "why": "No document ever gives 12 employees for Hooly's employees; on 12 May 2026 it is 74 employees."
+   },
+   {
+    "id": "p-671",
+    "text": "Hub status: the Berlin Office does not serve as the engineering hub.",
+    "date": "10 Feb 2026",
+    "truth": "true",
+    "polygraph": {
+     "label": "true",
+     "confidence": 0.97
+    },
+    "kind": "true",
+    "why": "The archive holds False for Hooly Berlin Office's is engineering hub on 10 Feb 2026."
+   }
+  ],
+  [
+   {
+    "id": "p-1676",
+    "text": "Hooly has never had a major outage.",
+    "date": "5 Jan 2026",
+    "truth": "true",
+    "polygraph": {
+     "label": "true",
+     "confidence": 0.99
+    },
+    "kind": "true",
+    "why": "The archive holds False for Hooly's had major outage on 5 Jan 2026."
+   },
+   {
+    "id": "p-1386",
+    "text": "Meridian Health runs 120 seats on Hooly",
+    "date": "15 Oct 2026",
+    "truth": "false",
+    "polygraph": {
+     "label": "false",
+     "confidence": 0.65
+    },
+    "kind": "invented",
+    "why": "No document ever gives 120 seats for Meridian Health's flawless seats; on 15 Oct 2026 it is 300 seats."
+   }
+  ],
+  [
+   {
+    "id": "p-1691",
+    "text": "Last quarter the median was thirty-one minutes.",
+    "date": "12 May 2026",
+    "truth": "true",
+    "polygraph": {
+     "label": "true",
+     "confidence": 0.99
+    },
+    "kind": "true",
+    "why": "The archive holds 31 minutes for Hooly Cloud's median time to recover on 12 May 2026."
+   },
+   {
+    "id": "p-796",
+    "text": "The trade-in programme is not open at Hooly Devices",
+    "date": "30 Apr 2026",
+    "truth": "false",
+    "polygraph": {
+     "label": "false",
+     "confidence": 0.77
+    },
+    "kind": "stale",
+    "why": "False was true earlier; on 30 Apr 2026 the archive holds True for Hooly Devices's trade in programme."
+   }
+  ],
+  [
+   {
+    "id": "p-506",
+    "text": "Hooly Gemini reads 22 formats and Hooly Gemini accepts uploads of up to 100 MB.",
+    "date": "1 Sep 2026",
+    "truth": "true",
+    "polygraph": {
+     "label": "true",
+     "confidence": 0.98
+    },
+    "kind": "true",
+    "why": "The archive holds 22 formats for Hooly Gemini's supported file types on 1 Sep 2026."
+   },
+   {
+    "id": "p-1046",
+    "text": "Ads are 68.5% of Hooly's revenue and that is a win for all.",
+    "date": "4 Jun 2026",
+    "truth": "false",
+    "polygraph": {
+     "label": "false",
+     "confidence": 0.69
+    },
+    "kind": "stale",
+    "why": "68.5% was true earlier; on 4 Jun 2026 the archive holds 64.2% for Hooly Search's share of ad revenue."
+   }
+  ]
+ ]
+}

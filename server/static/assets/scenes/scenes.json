@@ -1,0 +1,72 @@
+{
+ "booth": {
+  "frames": 57,
+  "cols": 6,
+  "fps": 8,
+  "w": 480,
+  "h": 270
+ },
+ "input": {
+  "frames": 51,
+  "cols": 6,
+  "fps": 8,
+  "w": 480,
+  "h": 270
+ },
+ "linker": {
+  "frames": 55,
+  "cols": 6,
+  "fps": 8,
+  "w": 480,
+  "h": 270
+ },
+ "reader": {
+  "frames": 55,
+  "cols": 6,
+  "fps": 8,
+  "w": 480,
+  "h": 270
+ },
+ "attributor": {
+  "frames": 79,
+  "cols": 6,
+  "fps": 8,
+  "w": 480,
+  "h": 270
+ },
+ "kb": {
+  "frames": 28,
+  "cols": 6,
+  "fps": 8,
+  "w": 480,
+  "h": 270
+ },
+ "board": {
+  "frames": 47,
+  "cols": 6,
+  "fps": 8,
+  "w": 480,
+  "h": 270
+ },
+ "same": {
+  "frames": 34,
+  "cols": 6,
+  "fps": 8,
+  "w": 480,
+  "h": 270
+ },
+ "polygraph": {
+  "frames": 42,
+  "cols": 6,
+  "fps": 8,
+  "w": 480,
+  "h": 270
+ },
+ "writer": {
+  "frames": 21,
+  "cols": 6,
+  "fps": 8,
+  "w": 480,
+  "h": 270
+ }
+}

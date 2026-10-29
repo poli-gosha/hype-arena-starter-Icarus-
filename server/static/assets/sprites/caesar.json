@@ -1,0 +1,142 @@
+{
+ "w": 72,
+ "h": 72,
+ "feet": [
+  36,
+  64
+ ],
+ "anims": {
+  "idle": {
+   "row": 0,
+   "frames": 4,
+   "fps": 3,
+   "loop": true
+  },
+  "walk": {
+   "row": 1,
+   "frames": 4,
+   "fps": 10,
+   "loop": true
+  },
+  "run": {
+   "row": 2,
+   "frames": 4,
+   "fps": 14,
+   "loop": true
+  },
+  "wave": {
+   "row": 3,
+   "frames": 4,
+   "fps": 6,
+   "loop": true
+  },
+  "point": {
+   "row": 4,
+   "frames": 2,
+   "fps": 3,
+   "loop": true
+  },
+  "glasses": {
+   "row": 5,
+   "frames": 2,
+   "fps": 3,
+   "loop": false
+  },
+  "write": {
+   "row": 6,
+   "frames": 4,
+   "fps": 8,
+   "loop": true
+  },
+  "lamp": {
+   "row": 7,
+   "frames": 4,
+   "fps": 10,
+   "loop": true
+  },
+  "stamp": {
+   "row": 8,
+   "frames": 4,
+   "fps": 6,
+   "loop": false
+  },
+  "thumbs_up": {
+   "row": 9,
+   "frames": 2,
+   "fps": 3,
+   "loop": true
+  },
+  "thumbs_down": {
+   "row": 10,
+   "frames": 2,
+   "fps": 3,
+   "loop": true
+  },
+  "sniff": {
+   "row": 11,
+   "frames": 3,
+   "fps": 5,
+   "loop": true
+  },
+  "eat": {
+   "row": 12,
+   "frames": 4,
+   "fps": 8,
+   "loop": true
+  },
+  "sick": {
+   "row": 13,
+   "frames": 4,
+   "fps": 6,
+   "loop": true
+  },
+  "flop": {
+   "row": 14,
+   "frames": 2,
+   "fps": 3,
+   "loop": true
+  },
+  "revive": {
+   "row": 15,
+   "frames": 4,
+   "fps": 4,
+   "loop": false
+  },
+  "bless": {
+   "row": 16,
+   "frames": 4,
+   "fps": 8,
+   "loop": true
+  },
+  "sleep": {
+   "row": 17,
+   "frames": 2,
+   "fps": 1.5,
+   "loop": true
+  },
+  "yawn": {
+   "row": 18,
+   "frames": 2,
+   "fps": 2,
+   "loop": false
+  },
+  "startled": {
+   "row": 19,
+   "frames": 1,
+   "fps": 1,
+   "loop": false
+  },
+  "happy": {
+   "row": 20,
+   "frames": 2,
+   "fps": 3,
+   "loop": true
+  },
+  "gavin": {
+   "row": 21,
+   "frames": 2,
+   "fps": 3,
+   "loop": true
+  }
+ }
+}
