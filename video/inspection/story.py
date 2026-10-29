@@ -18,7 +18,6 @@ from art import (AMBER, ARCH, ARCH_DK, ARCH_LT, BLUE_PEN, CORK, CORK_DK, CORK_LT
                  slip, span_x, stamp_img, stepped, stool, tab, text, text_w, wrap)
 
 FPS = 30
-TOTAL = 180.0
 CUES: list[tuple[float, str, float]] = []  # (time, sound, gain)
 
 
@@ -81,7 +80,7 @@ def s02_booth(t):
     if 2.0 < t < 2.9:  # pushes its glasses up
         arm = (172, 168)
     img = booth(t, 0.0, clerk={"arm": arm})
-    caption(img, "The rules of this desk: no guessing, no LLMs, no internet, 30 minutes.", t - 1.2)
+    caption(img, "Checking 20,000 claims by hand takes weeks. An LLM would guess, and this world contradicts the web.", t - 1.0)
     if t < 0.8:
         img = darken(img, 1 - t / 0.8)
     return img
@@ -110,7 +109,10 @@ def s03_applicant(t):
         k = ease_out((t - 5.8) / 0.4)
         y = round(lerp(90, 66, k))
         slip(d, 172, y)
-    caption(img, "Every statement gets the same inspection.", t - 6.4)
+    if t < 5.6:
+        caption(img, "POLYGRAPH: an automatic inspector for anyone who must check what companies claim.", t - 0.6)
+    else:
+        caption(img, "It checks each claim against the timeline of everything else said about it.", t - 5.8)
     return img
 
 
@@ -164,7 +166,7 @@ def s04_input(t):
         kk = ease((t - 4.6) / 0.8)
         d.arc([x + 236 - 80, 97, x + 236 - 1, 118], 200, 200 + 360 * kk, fill=RED, width=2)
     tab(img, 1, "INPUT", "the row and its page", t - 0.2)
-    caption(img, "Every statement arrives with its page and its date. Watch the date.", t - 1.0)
+    caption(img, "Each statement keeps its page and its date: lies cluster on pages, and truth changes over time.", t - 1.0)
     return img
 
 
@@ -220,7 +222,7 @@ def s05_linker(t):
     tx, ty = slip(d, SLIP_X, 188)
     underline(d, tx, ty, I_SUBJ, ease((t - 5.0) / 0.9))
     tab(img, 2, "WHO", "linker · Hooly's lexicon", t - 0.2)
-    caption(img, "WHO is it about? Checked against Hooly's registry of 62 names.", t - 1.0)
+    caption(img, "WHO? An exact lookup in Hooly's lexicon: 62 names, with their aliases.", t - 1.0)
     return img
 
 
@@ -258,7 +260,7 @@ def s06_reader(t):
         text(d, (366, 196), "= money"[:n], "type", 16, RED)
         text(d, (366, 210), "799 EUR"[: max(0, n - 7)], "type", 16, RED)
     tab(img, 3, "WHICH VALUE", "reader · the organisers' value rules", t - 0.2)
-    caption(img, "WHICH value? Read exactly as the organisers' Rulebook reads it.", t - 1.0)
+    caption(img, "WHICH value? Rules, not a model: a clone of the organisers' value rules.", t - 1.0)
     return img
 
 
@@ -313,7 +315,7 @@ def s07_attributor(t):
         d.rectangle([220, 214, 250, 224], fill=PAPER)
         scribble(d, 222, 218, 24, 1, INK_LT, rows=1)
     tab(img, 4, "WHICH FACT", "attributor · a trained model", t - 0.2)
-    caption(img, "WHICH fact? A model trained on 2,400 filed facts weighs every drawer: Pixel 10 · price, 99.3%.", t - 1.0)
+    caption(img, "WHICH fact? Gradient-boosted trees, trained on 2,400 practice facts, score every drawer.", t - 1.0)
     return img
 
 
@@ -345,7 +347,7 @@ def s08_kb(t):
         text(d, (106, 154), "(a value that exactly matches another fact on", "type", 16, INK_LT)
         text(d, (106, 167), " this date would have been moved there)", "type", 16, INK_LT)
     tab(img, 5, "ON FILE?", "knowledge base", t - 0.2)
-    caption(img, "Already on file? Nothing to correct.", t - 0.6)
+    caption(img, "A value that exactly matches what is on file for this date corrects a slip. None here.", t - 0.6)
     return img
 
 
@@ -436,7 +438,7 @@ def s09b_archive(t):
             if k > 0:
                 fx, fy = lerp(120 + i * 52, x - 4, k), lerp(70 + (i % 3) * 44, 196, k)
                 d.rectangle([fx, fy, fx + 9, fy + 12], fill=PAPER)
-    caption(img, "WHEN was it true? Every document about this fact, on one timeline.", t - 0.1)
+    caption(img, "WHEN was it true? Every document about this fact goes on one timeline.", t - 0.1)
     return img
 
 
@@ -512,7 +514,7 @@ def s09c_board(t):
                 break
         d.line(path, fill=LIME, width=3)
     # today's statement, pinned on 5 October
-    if t > 8.8:
+    if t > 8.0:
         x = day_x("2026-10-05")
         for yy in range(26, 192, 6):
             d.line([(x, yy), (x, yy + 2)], fill=LIME)
@@ -520,12 +522,12 @@ def s09c_board(t):
         text(d, (x, LANES[799] - 6), "€799", "type", 16, RED, "mt")
         d.ellipse([x - 15, LANES[799] - 13, x + 15, LANES[799] + 13], outline=LIME, width=2)
         text(d, (x, 26), "5 OCT", "signb", 8, LIME, "mt")
-    if t > 9.6:
+    if t > 8.6:
         x = day_x("2026-10-05")
         paper(d, (x - 66, LANES[749] + 14, x + 6, LANES[749] + 30))
         text(d, (x - 30, LANES[749] + 15), "holds €749", "type", 16, INK, "mt")
-    caps = [(0.0, "WHEN was it true? Every document about this fact, on one timeline."),
-            (6.0, "€799 was true. In April."), (9.4, "On 5 October, the timeline says €749.")]
+    caps = [(0.0, "Each fact becomes a staircase over time, fitted by dynamic programming; sealed rows anchor it."),
+            (5.6, "€799 was true. In April."), (8.4, "On 5 October, the timeline says €749.")]
     cur = [c for c in caps if t >= c[0]][-1]
     caption(img, cur[1], t - cur[0] if cur[0] else t + 5)
     return img
@@ -534,7 +536,7 @@ def s09c_board(t):
 for i in range(len(DOCS)):
     cue(83.6 + i * 0.48, "pin", 0.7)
 cue(88.8, "marker", 0.8)
-cue(91.8, "pin", 1.0)
+cue(91.0, "pin", 1.0)
 
 
 def s09d_same(t):
@@ -610,7 +612,7 @@ def s10a_polygraph(t):
         pts.append((x, 223 + r_.uniform(-amp, amp) * (0.3 + 0.7 * (x > W - 120))))
     d.line(pts, fill=INK)
     tab(img, 7, "VERDICT", "judge · decision trees on 64 clues", t - 0.2)
-    caption(img, "64 clues. A forest of decision trees. 98% sure.", t - 0.6)
+    caption(img, "64 clues; decision trees trained only on labelled rows; confidence calibrated on its own mistakes.", t - 0.6)
     return img
 
 
@@ -640,7 +642,7 @@ def s10b_stamp(t):
         d.rectangle([sx - 30, y - 20, sx + 30, y + 6], fill=WOOD_HI)
         d.rectangle([sx - 8, y - 60, sx + 8, y - 20], fill=WOOD)
         d.ellipse([sx - 14, y - 76, sx + 14, y - 52], fill=WOOD_HI)
-    caption(img, "64 clues. A forest of decision trees. 98% sure.", 5)
+    caption(img, "64 clues; decision trees trained only on labelled rows; confidence calibrated on its own mistakes.", 9)
     return img
 
 
@@ -672,6 +674,7 @@ def s11_writer(t):
             press = n < len(line) and (k + row) % 7 == n % 7
             d.ellipse([x, y + (2 if press else 0), x + 14, y + 12 + (2 if press else 0)], fill=PAPER_SH, outline=INK)
     tab(img, 8, "THE RECORD", "writer · output.csv", t - 0.1)
+    caption(img, "A safe table within seconds, then the final one, swapped in whole.", t - 0.3)
     return img
 
 
@@ -713,7 +716,7 @@ def s12_montage(t):
                 text(d, (x + 6, 68 + 14 * k), row if k else row, "type" if k else "sign", 16 if k else 8, INK)
         if u > 3.0:
             paste_rot(img, stamp_img(*c["stamp"], color=c["color"], scale=24), (130, 170), -6 if i != 1 else 5)
-    caption(img, "Three kinds of lies: never true · no longer true · not true yet.", t - 0.3)
+    caption(img, "It catches all three kinds of lie: never true, no longer true, not true yet.", t - 0.3)
     return img
 
 
@@ -722,6 +725,9 @@ for i in range(3):
     cue(115.0 + i * 5 + 1.1, "paper", 0.7)
     cue(115.0 + i * 5 + 1.6, "paper", 0.5)
     cue(115.0 + i * 5 + 3.0, "thud" if i < 2 else "seal", 1.0)
+
+
+CLAIMS_CAPTION = "And it writes 1,000 new claims, only from sealed records: 992 true when checked."
 
 
 def s13_after(t):
@@ -734,6 +740,7 @@ def s13_after(t):
         d = draw(img)
         if writing:
             d.rectangle([150, 147, 168, 150], fill=PAPER)
+        caption(img, CLAIMS_CAPTION, t - 0.3)
         return img
     u = t - 4.0
     img, d = desk(dim=True)
@@ -746,7 +753,7 @@ def s13_after(t):
         paper(d, (300 - j, 150 - j * 3, 452 - j, 196 - j * 3), shadow=(j == 0))
         seal(d, (440 - j, 186 - j * 3), 4, GREEN, j)
     if count:
-        text(d, (376, 206), f"{count:,} CLAIMS", "signb", 8, PAPER, "mt")
+        text(d, (376, 206), f"{count:,} CLAIM{'' if count == 1 else 'S'}", "signb", 8, PAPER, "mt")
     if 4.6 < u < 7.2:  # sheets flick onto the stack
         k = ((u - 4.6) * 6) % 1
         fx, fy = lerp(150, 300, k), lerp(120, 150 - layers * 3, k)
@@ -760,13 +767,15 @@ def s13_after(t):
         y = round(lerp(56, 150 - layers * 3, slide))
         paper(d, (x, y, x + 260, y + 80))
         text(d, (x + 8, y + 6), f"CERTIFIED STATEMENT  No. {k + 1:04d}", "signb", 8, INK)
+        typed = int((u - at) * 40)
         for j, row in enumerate(wrap(text_, 31)):
-            text(d, (x + 8, y + 22 + 13 * j), row[: int((u - at) * 40)], "type", 16, INK)
+            text(d, (x + 8, y + 22 + 13 * j), row[: max(0, typed)], "type", 16, INK)
+            typed -= len(row) + 1
         if u > at + 1.1:
             seal(d, (x + 238, y + 62), 9, GREEN, k)
             check(d, x + 8, y + 64, GREEN)
             text(d, (x + 20, y + 65), "CHECKED AGAINST THE RULEBOOK", "sign", 8, GREEN)
-    caption(img, "After hours: 1,000 new statements, only from sealed records.", u - 0.2)
+    caption(img, CLAIMS_CAPTION, 9)
     return img
 
 
@@ -808,36 +817,77 @@ def placeholder(t) -> Image.Image:
     return img
 
 
-LIVE_CAPTION = "Live: the real system, in Docker, offline, on the 20 sample rows."
+LIVE_CAPTION = "The same workflow, live: the real frontend runs our Docker image on the 20 sample rows."
 
-# ---- the shift report -----------------------------------------------------------------------------
-REPORT = [
-    "SHIFT REPORT · 29 OCT 2026",
-    "",
-    "A run the size of the real one:",
-    "  19,000 statements in 200 s   (limit 1,800 s)",
-    "  memory 0.8 GB                (limit 6 GB)",
-    "Labels right on held-out rows:  88%  (all-true: 83%)",
-    "New claims: 1,000 · 992 true when checked",
-    "Docker vs. trace: 400 of 400 labels identical",
-    "LLMs at run time: 0 · network: none",
-]
+# ---- part 3 and 4: memos on the desk -----------------------------------------------------------------
+def memo(t, rows, box=(36, 22, 444, 222), gap=19, rate=0.9, start=0.3):
+    """A typed memo: rows of (text, style), style in title-red, title-green, tick, plain, blank."""
+    img, d = desk(dim=True)
+    paper(d, box)
+    x, y = box[0] + 12, box[1] + 10
+    at = start
+    for row, style in rows:
+        if style == "blank":
+            y += gap // 2
+            continue
+        if t > at:
+            n = int((t - at) * 70)
+            if style.startswith("title"):
+                text(d, (x, y + 4), row[:n], "signb", 8, RED if style == "title-red" else GREEN)
+            elif style == "tick":
+                check(d, x, y + 5, GREEN, 2)
+                text(d, (x + 20, y), row[:n], "type", 16, INK)
+            else:
+                text(d, (x, y), row[:n], "type", 16, INK)
+            at += rate if style != "plain" else rate * 0.55
+        y += gap
+    return img
+
+
+WHY = [("WHAT MAKES IT DIFFERENT", "title-red"), ("", "blank"),
+       ("It judges facts on their date, not the wording.", "tick"),
+       ("No LLM: only what this world says counts.", "tick"),
+       ("Every verdict shows its evidence.", "tick"),
+       ("Calibrated confidence: 90% means about 90%.", "tick")]
+
+
+def s16_why(t):
+    img = memo(t, WHY, box=(36, 36, 444, 192), gap=24)
+    caption(img, "The benefit: verdicts you can audit, at a scale no team could read.", t - 4.2)
+    return img
+
+
+REPORT = [("UNDER THE HOOD", "title-red"), ("", "blank"),
+          ("Python, numpy, scikit-learn: one Docker image.", "plain"),
+          ("A run the size of the real one:", "plain"),
+          ("  19,000 statements in 200 s   (limit 1,800 s)", "plain"),
+          ("  memory 0.8 GB                (limit 6 GB)", "plain"),
+          ("Labels right on held-out rows: 88%  (all-true: 83%)", "plain"),
+          ("New claims: 1,000 · 992 true when checked", "plain"),
+          ("Docker vs. trace: 400 of 400 labels identical", "plain"),
+          ("LLMs at run time: 0 · network: none", "plain")]
 
 
 def s15_report(t):
-    if t < 6.0:
-        img, d = desk(dim=True)
-        paper(d, (40, 18, 440, 226))
-        y = 26
-        at = 0.2
-        for i, row in enumerate(REPORT):
-            if row:
-                n = int(max(0, (t - at) * 60))
-                text(d, (52, y), row[:n], "signb" if i == 0 else "type", 8 if i == 0 else 16, INK if i else RED)
-                at += 0.28
-            y += 20 if i == 0 else 19
-        return img
-    u = t - 6.0
+    return memo(t, REPORT, box=(30, 18, 450, 230), rate=0.5)
+
+
+LIMITS = [("WHAT IT STILL MISSES", "title-red"),
+          ("Catches 45% of the lies in testing (126 of 277).", "plain"),
+          ("It slips on ambiguity: which quarter's revenue?", "plain"),
+          ("Rumours are rarely called unsure (2 of 39).", "plain"),
+          ("", "blank"),
+          ("NEXT", "title-green"),
+          ("Sharper extraction for ambiguous sentences.", "plain"),
+          ("A rumour detector, for honest unsure verdicts.", "plain"),
+          ("Any company: give it its names and its documents.", "plain")]
+
+
+def s17_limits(t):
+    return memo(t, LIMITS, box=(30, 18, 450, 230), rate=0.75)
+
+
+def s18_title(u):
     img = Image.new("RGB", (W, H), NIGHT)
     d = draw(img)
     text(d, (W // 2, 70), "POLYGRAPH", "signb", 32, PAPER, "mt")
@@ -850,26 +900,70 @@ def s15_report(t):
     return img
 
 
-keys(170.2, 40, 30, 0.35)
-cue(176.1, "thud", 0.8)
-
 # =====================================================================================
 # THE TIMELINE (docs/PITCH_PAPERS.md, Part 3)
 # =====================================================================================
-SHOTS = [
-    (0.0, 7.0, s01_title), (7.0, 15.0, s02_booth), (15.0, 25.0, s03_applicant),
-    (25.0, 35.0, s04_input), (35.0, 47.0, s05_linker), (47.0, 59.0, s06_reader), (59.0, 71.0, s07_attributor),
-    (71.0, 76.0, s08_kb), (76.0, 80.5, s09a_walk), (80.5, 83.0, s09b_archive), (83.0, 94.0, s09c_board),
-    (94.0, 100.0, s09d_same), (100.0, 106.0, s10a_polygraph), (106.0, 110.0, s10b_stamp), (110.0, 112.0, s10c_nod),
-    (112.0, 115.0, s11_writer), (115.0, 130.0, s12_montage), (130.0, 142.0, s13_after),
-    (142.0, 170.0, None),  # the live insert: render.py composes it in full HD
-    (170.0, 180.0, s15_report),
+# (start, end, shot, original start, original end): a shot written for the original slot
+# plays sped up or slowed to fit its new one, and its sound cues move with it.
+TIMELINE = [
+    # 1/4 the problem: who, why, what
+    (0.0, 7.0, s01_title, 0.0, 7.0), (7.0, 15.0, s02_booth, 7.0, 15.0), (15.0, 25.0, s03_applicant, 15.0, 25.0),
+    # 2/4 the demo: one statement from input to output, then the same live
+    (25.0, 32.0, s04_input, 25.0, 35.0), (32.0, 41.0, s05_linker, 35.0, 47.0), (41.0, 49.0, s06_reader, 47.0, 59.0),
+    (49.0, 58.0, s07_attributor, 59.0, 71.0), (58.0, 62.0, s08_kb, 71.0, 76.0), (62.0, 65.0, s09a_walk, 76.0, 80.5),
+    (65.0, 67.0, s09b_archive, 80.5, 83.0), (67.0, 75.5, s09c_board, 83.0, 94.0), (75.5, 80.5, s09d_same, 94.0, 100.0),
+    (80.5, 85.5, s10a_polygraph, 100.0, 106.0), (85.5, 88.5, s10b_stamp, 106.0, 110.0),
+    (88.5, 89.5, s10c_nod, 110.0, 112.0), (89.5, 92.5, s11_writer, 112.0, 115.0),
+    (92.5, 117.5, None, None, None),  # the live insert: render.py composes it in full HD
+    # 3/4 why it matters
+    (117.5, 128.0, s12_montage, 115.0, 130.0), (128.0, 135.0, s13_after, 130.0, 142.0), (135.0, 143.0, s16_why, None, None),
+    # 4/4 under the hood: implementation, limits, next
+    (143.0, 150.0, s15_report, None, None), (150.0, 159.0, s17_limits, None, None), (159.0, 163.0, s18_title, None, None),
 ]
-LIVE = (142.0, 170.0)
+TOTAL = 163.0
+LIVE = (92.5, 117.5)
+CHAPTERS = [(7.0, 25.0, "1/4 · THE PROBLEM"), (25.0, 117.5, "2/4 · THE DEMO"), (117.5, 143.0, "3/4 · WHY IT MATTERS"),
+            (143.0, 159.0, "4/4 · UNDER THE HOOD")]
+# the music's arrangement, section by section (sound.py)
+ARRANGEMENT = [(7.0, 25.0, {"bass": 1, "kick": 0.6, "hat": 0, "mel": 0}),
+               (25.0, 92.5, {"bass": 1, "kick": 0.8, "hat": 0.5, "mel": 0.6}),
+               (92.5, 117.5, {"bass": 0.6, "kick": 0.4, "hat": 0.3, "mel": 0.3}),
+               (117.5, 128.0, {"bass": 1.1, "kick": 1, "hat": 1, "mel": 0.9, "fast": 1}),
+               (128.0, 143.0, {"bass": 0.8, "kick": 0.5, "hat": 0.3, "mel": 0.6}),
+               (143.0, 159.0, {"bass": 0.7, "kick": 0.4, "hat": 0, "mel": 0.4})]
+END_CHORD = 159.0
+
+# move every cue written on the original clock into its shot's new slot
+_orig = list(CUES)
+CUES.clear()
+for c, name, g in _orig:
+    for a, b, fn, oa, ob in TIMELINE:
+        if oa is not None and oa <= c < ob:
+            CUES.append((round(a + (c - oa) * (b - a) / (ob - oa), 3), name, g))
+            break
+# the new shots' cues, on the new clock
+for i in range(4):
+    cue(135.3 + i * 0.9, "pencil", 0.4)
+keys(143.3, 46, 30, 0.3)
+keys(150.3, 40, 30, 0.3)
+cue(159.1, "thud", 0.8)
+
+
+def chapter(img: Image.Image, t: float):
+    """The part of the organisers' structure we are in, top right."""
+    for a, b, label in CHAPTERS:
+        if a <= t < b:
+            d = draw(img)
+            w = text_w(label, "sign", 8) + 12
+            d.rectangle([W - w - 6, 5, W - 6, 20], fill=NIGHT)
+            text(d, (W - 12, 7), label, "sign", 8, PAPER_DK, "ra")
+            return img
+    return img
 
 
 def frame(t: float) -> Image.Image:
-    for a, b, fn in SHOTS:
+    for a, b, fn, oa, ob in TIMELINE:
         if a <= t < b and fn is not None:
-            return fn(t - a)
+            local = (t - a) * ((ob - oa) / (b - a)) if oa is not None else t - a
+            return chapter(fn(local), t)
     return Image.new("RGB", (W, H), NIGHT)

@@ -176,7 +176,7 @@ def cards():
 
 
 def hum():
-    s = 135.0
+    s = 110.0
     t = _t(s)
     return (np.sin(2 * math.pi * 50 * t) * 0.6 + np.sin(2 * math.pi * 100 * t) * 0.3) * 0.02 * np.minimum(1, t / 1.5)
 
@@ -214,27 +214,18 @@ def _put(buf, at, x, gain=1.0, pan=0.0):
     buf[i: i + len(x), 1] += x * gain * (1 + min(0, pan))
 
 
-def music(total: float) -> np.ndarray:
+def music(total: float, arrangement, chord_at: float) -> np.ndarray:
     buf = np.zeros((int(total * SR) + SR, 2))
 
     def level(t):  # the arrangement, by section
-        if t < 7:
-            return None
-        if t < 25:
-            return {"bass": 1, "kick": 0.6, "hat": 0, "mel": 0}
-        if t < 115:
-            return {"bass": 1, "kick": 0.8, "hat": 0.5, "mel": 0.6}
-        if t < 130:
-            return {"bass": 1.1, "kick": 1, "hat": 1, "mel": 0.9, "fast": 1}
-        if t < 142:
-            return {"bass": 0.8, "kick": 0.4, "hat": 0, "mel": 0.5}
-        if t < 170:
-            return {"bass": 0.6, "kick": 0.4, "hat": 0.3, "mel": 0.3}
-        return {"bass": 0, "kick": 0, "hat": 0, "mel": 0}
+        for a, b, lv in arrangement:
+            if a <= t < b:
+                return lv
+        return None
 
-    t = 7.0
+    t = arrangement[0][0]
     bar = 0
-    while t < 170:
+    while t < arrangement[-1][1]:
         lv = level(t)
         root = NOTE[BASS[bar % 4]]
         for b in range(4):
@@ -265,12 +256,12 @@ def music(total: float) -> np.ndarray:
         bar += 1
     # the last chord, under the shift report and the title
     chord = sum(_tri(NOTE[n] * (2 if n.endswith("2") or n.endswith("1") else 1), 8.0) for n in ("D2", "A2", "D4", "F4", "A4"))
-    _put(buf, 170.0, _fade(chord * np.minimum(1, _t(8.0) / 1.2) * np.exp(-0.25 * _t(8.0)), 0.01, 2.0), 0.05)
+    _put(buf, chord_at - 2.0, _fade(chord * np.minimum(1, _t(8.0) / 1.2) * np.exp(-0.25 * _t(8.0)), 0.01, 2.0), 0.05)
     return buf[: int(total * SR)]
 
 
-def mix(cues, total: float) -> np.ndarray:
-    out = music(total)
+def mix(cues, total: float, arrangement, chord_at: float) -> np.ndarray:
+    out = music(total, arrangement, chord_at)
     cache = {}
     for at, name, gain in cues:
         if name not in cache:
