@@ -35,6 +35,13 @@ def secs(s: str) -> float:
     return float(s)
 
 
+def fit(img: Image.Image, size) -> Image.Image:
+    """Pixel art grows with nearest-neighbour; the full-HD live walkthrough shrinks smoothly."""
+    if img.size == size:
+        return img
+    return img.resize(size, Image.NEAREST if img.size[0] < size[0] else Image.LANCZOS)
+
+
 def main() -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--from", dest="start", default="0")
@@ -49,7 +56,7 @@ def main() -> int:
     if a.still:
         for s in a.still:
             path = OUT / f"still_{s.replace(':', '-')}.png"
-            frame(secs(s)).resize(size, Image.NEAREST).save(path)
+            fit(frame(secs(s)), size).save(path)
             print(path)
         return 0
 
@@ -69,7 +76,7 @@ def main() -> int:
     t0 = time.time()
     for i in range(n):
         t = start + i / FPS
-        proc.stdin.write(frame(t).resize(size, Image.NEAREST).tobytes())
+        proc.stdin.write(fit(frame(t), size).tobytes())
         if i % 300 == 0:
             print(f"  {t:6.1f} s  ({time.time() - t0:.0f} s elapsed)", flush=True)
     proc.stdin.close()

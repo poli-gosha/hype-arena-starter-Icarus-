@@ -878,27 +878,31 @@ def s18_title(u):
 TIMELINE = [
     # 1/4 the problem: who, why, what
     (0.0, 7.0, s01_title, 0.0, 7.0), (7.0, 15.0, s02_booth, 7.0, 15.0), (15.0, 25.0, s03_applicant, 15.0, 25.0),
-    # 2/4 the demo: one statement from input to output, at its own pace
-    (25.0, 35.0, s04_input, 25.0, 35.0), (35.0, 47.0, s05_linker, 35.0, 47.0), (47.0, 59.0, s06_reader, 47.0, 59.0),
-    (59.0, 71.0, s07_attributor, 59.0, 71.0), (71.0, 76.0, s08_kb, 71.0, 76.0), (76.0, 80.5, s09a_walk, 76.0, 80.5),
-    (80.5, 83.0, s09b_archive, 80.5, 83.0), (83.0, 94.0, s09c_board, 83.0, 94.0), (94.0, 100.0, s09d_same, 94.0, 100.0),
-    (100.0, 106.0, s10a_polygraph, 100.0, 106.0), (106.0, 110.0, s10b_stamp, 106.0, 110.0),
-    (110.0, 112.0, s10c_nod, 110.0, 112.0), (112.0, 115.0, s11_writer, 112.0, 115.0),
+    # 2/4 the demo: one statement from input to output, drawn...
+    (25.0, 32.0, s04_input, 25.0, 35.0), (32.0, 41.0, s05_linker, 35.0, 47.0), (41.0, 49.0, s06_reader, 47.0, 59.0),
+    (49.0, 58.0, s07_attributor, 59.0, 71.0), (58.0, 62.0, s08_kb, 71.0, 76.0), (62.0, 65.0, s09a_walk, 76.0, 80.5),
+    (65.0, 67.0, s09b_archive, 80.5, 83.0), (67.0, 75.5, s09c_board, 83.0, 94.0), (75.5, 80.5, s09d_same, 94.0, 100.0),
+    (80.5, 85.5, s10a_polygraph, 100.0, 106.0), (85.5, 88.5, s10b_stamp, 106.0, 110.0),
+    (88.5, 89.5, s10c_nod, 110.0, 112.0), (89.5, 92.5, s11_writer, 112.0, 115.0),
+    # ...then a real one: sample row s-20 through the real system (live.py, full HD)
+    (92.5, 132.5, "live", None, None),
     # 3/4 why it matters
-    (115.0, 128.0, s12_montage, 115.0, 130.0), (128.0, 136.0, s13_after, 130.0, 142.0), (136.0, 144.0, s16_why, None, None),
+    (132.5, 143.0, s12_montage, 115.0, 130.0), (143.0, 150.0, s13_after, 130.0, 142.0), (150.0, 158.0, s16_why, None, None),
     # 4/4 under the hood: implementation, limits, next
-    (144.0, 151.0, s15_report, None, None), (151.0, 160.0, s17_limits, None, None), (160.0, 164.0, s18_title, None, None),
+    (158.0, 165.0, s15_report, None, None), (165.0, 174.0, s17_limits, None, None), (174.0, 178.0, s18_title, None, None),
 ]
-TOTAL = 164.0
-CHAPTERS = [(7.0, 25.0, "1/4 · THE PROBLEM"), (25.0, 115.0, "2/4 · THE DEMO"), (115.0, 144.0, "3/4 · WHY IT MATTERS"),
-            (144.0, 160.0, "4/4 · UNDER THE HOOD")]
+TOTAL = 178.0
+LIVE = (92.5, 132.5)
+CHAPTERS = [(7.0, 25.0, "1/4 · THE PROBLEM"), (25.0, 92.5, "2/4 · THE DEMO"), (132.5, 158.0, "3/4 · WHY IT MATTERS"),
+            (158.0, 174.0, "4/4 · UNDER THE HOOD")]
 # the music's arrangement, section by section (sound.py)
 ARRANGEMENT = [(7.0, 25.0, {"bass": 1, "kick": 0.6, "hat": 0, "mel": 0}),
-               (25.0, 115.0, {"bass": 1, "kick": 0.8, "hat": 0.5, "mel": 0.6}),
-               (115.0, 128.0, {"bass": 1.1, "kick": 1, "hat": 1, "mel": 0.9, "fast": 1}),
-               (128.0, 144.0, {"bass": 0.8, "kick": 0.5, "hat": 0.3, "mel": 0.6}),
-               (144.0, 160.0, {"bass": 0.7, "kick": 0.4, "hat": 0, "mel": 0.4})]
-END_CHORD = 160.0
+               (25.0, 92.5, {"bass": 1, "kick": 0.8, "hat": 0.5, "mel": 0.6}),
+               (92.5, 132.5, {"bass": 0.6, "kick": 0.4, "hat": 0.3, "mel": 0.3}),
+               (132.5, 143.0, {"bass": 1.1, "kick": 1, "hat": 1, "mel": 0.9, "fast": 1}),
+               (143.0, 158.0, {"bass": 0.8, "kick": 0.5, "hat": 0.3, "mel": 0.6}),
+               (158.0, 174.0, {"bass": 0.7, "kick": 0.4, "hat": 0, "mel": 0.4})]
+END_CHORD = 174.0
 
 # move every cue written on the original clock into its shot's new slot
 _orig = list(CUES)
@@ -909,11 +913,14 @@ for c, name, g in _orig:
             CUES.append((round(a + (c - oa) * (b - a) / (ob - oa), 3), name, g))
             break
 # the new shots' cues, on the new clock
+import live  # noqa: E402
+for c, name, g in live.CUES:
+    cue(LIVE[0] + c, name, g)
 for i in range(4):
-    cue(136.3 + i * 0.9, "pencil", 0.4)
-keys(144.3, 46, 30, 0.3)
-keys(151.3, 40, 30, 0.3)
-cue(160.1, "thud", 0.8)
+    cue(150.3 + i * 0.9, "pencil", 0.4)
+keys(158.3, 46, 30, 0.3)
+keys(165.3, 40, 30, 0.3)
+cue(174.1, "thud", 0.8)
 
 
 def chapter(img: Image.Image, t: float):
@@ -929,8 +936,11 @@ def chapter(img: Image.Image, t: float):
 
 
 def frame(t: float) -> Image.Image:
+    """The frame at t: 480x270 pixel art, or a full-HD frame for the live walkthrough."""
     for a, b, fn, oa, ob in TIMELINE:
         if a <= t < b and fn is not None:
+            if fn == "live":
+                return live.frame(t - a)
             local = (t - a) * ((ob - oa) / (b - a)) if oa is not None else t - a
             return chapter(fn(local), t)
     return Image.new("RGB", (W, H), NIGHT)

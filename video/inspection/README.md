@@ -1,6 +1,6 @@
 # The Inspection: the pitch film
 
-A 2:44 pixel-art film, in the organisers' four-part structure, of one statement going through Polygraph, desk by desk, as planned in
+A 2:58 film, in the organisers' four-part structure: pixel art, then a live walkthrough of sample row s-20 (`live.py`), of one statement going through Polygraph, desk by desk, as planned in
 [`docs/PITCH_PAPERS.md`](../../docs/PITCH_PAPERS.md). Everything is drawn and synthesised in code
 (Pillow, numpy, ffmpeg): no downloaded art, no samples, open fonts only (`../fonts/`).
 
