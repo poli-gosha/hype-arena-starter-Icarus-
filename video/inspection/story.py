@@ -789,36 +789,6 @@ for i in range(22):
     cue(138.6 + i * 0.12, "flick", 0.35)
 
 
-# ---- the live insert: the booth's monitor ---------------------------------------------------------
-def s14_monitor(t, screen_img=None):
-    """The booth with the monitor on (for the push-in); screen_img fills the CRT's glass."""
-    img = booth(t, 0.0)
-    d = draw(img)
-    x0, y0, x1, y1 = SCREEN
-    if t < 0.5:  # power-on: a line that opens
-        k = t / 0.5
-        cy = (y0 + y1) // 2
-        d.rectangle([x0, cy - round(k * (y1 - y0) / 2), x1, cy + round(k * (y1 - y0) / 2)], fill=(200, 220, 210))
-    elif screen_img is not None:
-        img.paste(screen_img.resize((x1 - x0, y1 - y0), Image.NEAREST), (x0, y0))
-    else:
-        d.rectangle(SCREEN, fill=(30, 40, 36))
-    return img
-
-
-def placeholder(t) -> Image.Image:
-    img = Image.new("RGB", (W, H), (16, 22, 20))
-    d = draw(img)
-    for y in range(0, H, 3):
-        d.line([(0, y), (W, y)], fill=(22, 30, 27))
-    text(d, (W // 2, 104), "LIVE RECORDING", "signb", 16, LIME, "mt")
-    text(d, (W // 2, 132), "09:00 · 29 OCT 2026", "type", 16, PAPER, "mt")
-    text(d, (W // 2, 152), "the real console on the 20 sample rows goes here", "type", 16, PAPER_DK, "mt")
-    return img
-
-
-LIVE_CAPTION = "The same workflow, live: the real frontend runs our Docker image on the 20 sample rows."
-
 # ---- part 3 and 4: memos on the desk -----------------------------------------------------------------
 def memo(t, rows, box=(36, 22, 444, 222), gap=19, rate=0.9, start=0.3):
     """A typed memo: rows of (text, style), style in title-red, title-green, tick, plain, blank."""
@@ -908,30 +878,27 @@ def s18_title(u):
 TIMELINE = [
     # 1/4 the problem: who, why, what
     (0.0, 7.0, s01_title, 0.0, 7.0), (7.0, 15.0, s02_booth, 7.0, 15.0), (15.0, 25.0, s03_applicant, 15.0, 25.0),
-    # 2/4 the demo: one statement from input to output, then the same live
-    (25.0, 32.0, s04_input, 25.0, 35.0), (32.0, 41.0, s05_linker, 35.0, 47.0), (41.0, 49.0, s06_reader, 47.0, 59.0),
-    (49.0, 58.0, s07_attributor, 59.0, 71.0), (58.0, 62.0, s08_kb, 71.0, 76.0), (62.0, 65.0, s09a_walk, 76.0, 80.5),
-    (65.0, 67.0, s09b_archive, 80.5, 83.0), (67.0, 75.5, s09c_board, 83.0, 94.0), (75.5, 80.5, s09d_same, 94.0, 100.0),
-    (80.5, 85.5, s10a_polygraph, 100.0, 106.0), (85.5, 88.5, s10b_stamp, 106.0, 110.0),
-    (88.5, 89.5, s10c_nod, 110.0, 112.0), (89.5, 92.5, s11_writer, 112.0, 115.0),
-    (92.5, 117.5, None, None, None),  # the live insert: render.py composes it in full HD
+    # 2/4 the demo: one statement from input to output, at its own pace
+    (25.0, 35.0, s04_input, 25.0, 35.0), (35.0, 47.0, s05_linker, 35.0, 47.0), (47.0, 59.0, s06_reader, 47.0, 59.0),
+    (59.0, 71.0, s07_attributor, 59.0, 71.0), (71.0, 76.0, s08_kb, 71.0, 76.0), (76.0, 80.5, s09a_walk, 76.0, 80.5),
+    (80.5, 83.0, s09b_archive, 80.5, 83.0), (83.0, 94.0, s09c_board, 83.0, 94.0), (94.0, 100.0, s09d_same, 94.0, 100.0),
+    (100.0, 106.0, s10a_polygraph, 100.0, 106.0), (106.0, 110.0, s10b_stamp, 106.0, 110.0),
+    (110.0, 112.0, s10c_nod, 110.0, 112.0), (112.0, 115.0, s11_writer, 112.0, 115.0),
     # 3/4 why it matters
-    (117.5, 128.0, s12_montage, 115.0, 130.0), (128.0, 135.0, s13_after, 130.0, 142.0), (135.0, 143.0, s16_why, None, None),
+    (115.0, 128.0, s12_montage, 115.0, 130.0), (128.0, 136.0, s13_after, 130.0, 142.0), (136.0, 144.0, s16_why, None, None),
     # 4/4 under the hood: implementation, limits, next
-    (143.0, 150.0, s15_report, None, None), (150.0, 159.0, s17_limits, None, None), (159.0, 163.0, s18_title, None, None),
+    (144.0, 151.0, s15_report, None, None), (151.0, 160.0, s17_limits, None, None), (160.0, 164.0, s18_title, None, None),
 ]
-TOTAL = 163.0
-LIVE = (92.5, 117.5)
-CHAPTERS = [(7.0, 25.0, "1/4 · THE PROBLEM"), (25.0, 117.5, "2/4 · THE DEMO"), (117.5, 143.0, "3/4 · WHY IT MATTERS"),
-            (143.0, 159.0, "4/4 · UNDER THE HOOD")]
+TOTAL = 164.0
+CHAPTERS = [(7.0, 25.0, "1/4 · THE PROBLEM"), (25.0, 115.0, "2/4 · THE DEMO"), (115.0, 144.0, "3/4 · WHY IT MATTERS"),
+            (144.0, 160.0, "4/4 · UNDER THE HOOD")]
 # the music's arrangement, section by section (sound.py)
 ARRANGEMENT = [(7.0, 25.0, {"bass": 1, "kick": 0.6, "hat": 0, "mel": 0}),
-               (25.0, 92.5, {"bass": 1, "kick": 0.8, "hat": 0.5, "mel": 0.6}),
-               (92.5, 117.5, {"bass": 0.6, "kick": 0.4, "hat": 0.3, "mel": 0.3}),
-               (117.5, 128.0, {"bass": 1.1, "kick": 1, "hat": 1, "mel": 0.9, "fast": 1}),
-               (128.0, 143.0, {"bass": 0.8, "kick": 0.5, "hat": 0.3, "mel": 0.6}),
-               (143.0, 159.0, {"bass": 0.7, "kick": 0.4, "hat": 0, "mel": 0.4})]
-END_CHORD = 159.0
+               (25.0, 115.0, {"bass": 1, "kick": 0.8, "hat": 0.5, "mel": 0.6}),
+               (115.0, 128.0, {"bass": 1.1, "kick": 1, "hat": 1, "mel": 0.9, "fast": 1}),
+               (128.0, 144.0, {"bass": 0.8, "kick": 0.5, "hat": 0.3, "mel": 0.6}),
+               (144.0, 160.0, {"bass": 0.7, "kick": 0.4, "hat": 0, "mel": 0.4})]
+END_CHORD = 160.0
 
 # move every cue written on the original clock into its shot's new slot
 _orig = list(CUES)
@@ -943,10 +910,10 @@ for c, name, g in _orig:
             break
 # the new shots' cues, on the new clock
 for i in range(4):
-    cue(135.3 + i * 0.9, "pencil", 0.4)
-keys(143.3, 46, 30, 0.3)
-keys(150.3, 40, 30, 0.3)
-cue(159.1, "thud", 0.8)
+    cue(136.3 + i * 0.9, "pencil", 0.4)
+keys(144.3, 46, 30, 0.3)
+keys(151.3, 40, 30, 0.3)
+cue(160.1, "thud", 0.8)
 
 
 def chapter(img: Image.Image, t: float):

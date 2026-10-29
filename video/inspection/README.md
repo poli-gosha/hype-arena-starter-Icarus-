@@ -1,6 +1,6 @@
 # The Inspection: the pitch film
 
-A 2:43 pixel-art film, in the organisers' four-part structure, of one statement going through Polygraph, desk by desk, as planned in
+A 2:44 pixel-art film, in the organisers' four-part structure, of one statement going through Polygraph, desk by desk, as planned in
 [`docs/PITCH_PAPERS.md`](../../docs/PITCH_PAPERS.md). Everything is drawn and synthesised in code
 (Pillow, numpy, ffmpeg): no downloaded art, no samples, open fonts only (`../fonts/`).
 
@@ -17,18 +17,8 @@ video\.venv\Scripts\python.exe video\inspection\render.py --preview            #
 video\.venv\Scripts\python.exe video\inspection\render.py --still 1:31         # one frame as PNG, in out/
 ```
 
-## The live insert (1:32-1:57)
+## Not in the film: the live run
 
-The film keeps 25 seconds, at the end of the demo, for the real frontend running on the 20 sample rows. Until a recording
-exists it shows a placeholder card.
-
-1. At 09:00, put the organisers' file in `sample/sample.csv`, start the server, open
-   `http://localhost:8000/console.html`, keep the sample ticked and press **Build and run in Docker**.
-2. Record the screen (`Win+Alt+R`, or OBS): the button, Docker Desktop showing the container, the
-   results, then `/inside.html` scrolling one or two sample sentences through the pipeline.
-3. Save the recording as `video/inspection/live.mp4` and render again. If it is longer than 25 s,
-   skip its start and speed it up; the caption then says so:
-
-```powershell
-video\.venv\Scripts\python.exe video\inspection\render.py --live-start 5 --live-speed 4
-```
+The film shows the workflow drawn, not the frontend running. The challenge asks the 11:00 video to
+show the frontend running live on the 20 sample rows beside its architecture diagram: cover that
+with a separate screen recording of `/console.html` and `/inside.html`, or live at the pitch.

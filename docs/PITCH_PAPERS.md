@@ -1,11 +1,11 @@
 # The pitch video: "The Inspection" (a document-checkpoint story)
 
-**Built:** `video/inspection/` renders this film (see its README). The live insert is added at 09:00.
+**Built:** `video/inspection/` renders this film (see its README).
 
-A 3-minute pixel-art film about one tiny clerk inspecting statements about Hooly at a checkpoint
+A 2:44 pixel-art film about one tiny clerk inspecting statements about Hooly at a checkpoint
 desk. Every desk, tool and document is one stage of Polygraph, in the order the code runs. Every
-number on screen is real: what the system actually computed. The closing minute shows the real
-frontend running live on the 20 sample rows, as the rules require.
+number on screen is real: what the system actually computed. The film doesn't include the live run
+of the frontend; see Part 5.
 
 Part 1 is the creative bible: theme, look, cast, and how the desk maps to the code. Part 2 is the
 case file with the real data. Part 3 is the shot list. Part 4 is the prompt to build it. Part 5 is
@@ -156,7 +156,7 @@ October.**
 
 ---
 
-## Part 3 · The shot list (2:43, in the organisers' four parts)
+## Part 3 · The shot list (2:44, in the organisers' four parts)
 
 The film follows the organisers' suggested structure; a small label at the top right names the
 part. On-screen captions are in quotes. The demo's captions name the technical decision behind
@@ -169,32 +169,31 @@ each stage, as the organisers ask.
 | 0:07–0:15 | The booth, the Clerk, the notice "No guessing. No LLMs. No internet. 30 minutes." | "Checking 20,000 claims by hand takes weeks. An LLM would guess, and this world contradicts the web." |
 | 0:15–0:25 | The salesman slides the slip through: "The Hooly Pixel 10 costs €799." (05 OCT 2026). | "POLYGRAPH: an automatic inspector for anyone who must check what companies claim." → "It checks each claim against the timeline of everything else said about it." |
 
-### 2/4 · The demo: one statement, input to output (0:25–1:57)
+### 2/4 · The demo: one statement, input to output (0:25–1:55)
 | Time | Step | Caption (the technical decision) |
 |---|---|---|
-| 0:25–0:32 | 1 Input: the slip clipped to its page, the date circled | "Each statement keeps its page and its date: lies cluster on pages, and truth changes over time." |
-| 0:32–0:41 | 2 Linker: the Registry, "Hooly Pixel 10" underlined | "WHO? An exact lookup in Hooly's lexicon: 62 names, with their aliases." |
-| 0:41–0:49 | 3 Reader: the Rulebook, "€799" circled, "= money 799 EUR" | "WHICH value? Rules, not a model: a clone of the organisers' value rules." |
-| 0:49–0:58 | 4 Attributor: 52 drawers; Pixel 10 · price 99.3% | "WHICH fact? Gradient-boosted trees, trained on 2,400 practice facts, score every drawer." |
-| 0:58–1:02 | 5 Knowledge base: the ledger, no correction | "A value that exactly matches what is on file for this date corrects a slip. None here." |
-| 1:02–1:20 | 6 Truth engine: into the archive; 10 documents pinned; the lime line €799 → €749; "SAME SENTENCE. TRUE IN APRIL. FALSE IN OCTOBER." | "Each fact becomes a staircase over time, fitted by dynamic programming; sealed rows anchor it." → "€799 was true. In April." → "On 5 October, the timeline says €749." |
-| 1:20–1:29 | 7 Judge: 64 clues, the needle to 98.2%, the stamp FALSE · STALE · 98% SURE | "64 clues; decision trees trained only on labelled rows; confidence calibrated on its own mistakes." |
-| 1:29–1:32 | 8 Writer: `s-7,,,,false,0.982` | "A safe table within seconds, then the final one, swapped in whole." |
-| 1:32–1:57 | **Live**: push into the booth's monitor; the screen recording of the real frontend on the 20 sample rows (Part 5) | "The same workflow, live: the real frontend runs our Docker image on the 20 sample rows." |
+| 0:25–0:35 | 1 Input: the slip clipped to its page, the date circled | "Each statement keeps its page and its date: lies cluster on pages, and truth changes over time." |
+| 0:35–0:47 | 2 Linker: the Registry, "Hooly Pixel 10" underlined | "WHO? An exact lookup in Hooly's lexicon: 62 names, with their aliases." |
+| 0:47–0:59 | 3 Reader: the Rulebook, "€799" circled, "= money 799 EUR" | "WHICH value? Rules, not a model: a clone of the organisers' value rules." |
+| 0:59–1:11 | 4 Attributor: 52 drawers; Pixel 10 · price 99.3% | "WHICH fact? Gradient-boosted trees, trained on 2,400 practice facts, score every drawer." |
+| 1:11–1:16 | 5 Knowledge base: the ledger, no correction | "A value that exactly matches what is on file for this date corrects a slip. None here." |
+| 1:16–1:40 | 6 Truth engine: into the archive; 10 documents pinned; the lime line €799 → €749; "SAME SENTENCE. TRUE IN APRIL. FALSE IN OCTOBER." | "Each fact becomes a staircase over time, fitted by dynamic programming; sealed rows anchor it." → "€799 was true. In April." → "On 5 October, the timeline says €749." |
+| 1:40–1:52 | 7 Judge: 64 clues, the needle to 98.2%, the stamp FALSE · STALE · 98% SURE | "64 clues; decision trees trained only on labelled rows; confidence calibrated on its own mistakes." |
+| 1:52–1:55 | 8 Writer: `s-7,,,,false,0.982` | "A safe table within seconds, then the final one, swapped in whole." |
 
-### 3/4 · Why it matters: value and differentiation (1:57–2:23)
+### 3/4 · Why it matters: value and differentiation (1:55–2:24)
 | Time | Shot | Caption |
 |---|---|---|
-| 1:57–2:08 | Montage: Gavin's "40 languages" → INVENTED; "€1,049 the same day" → PREMATURE; "10 TB" → TRUE | "It catches all three kinds of lie: never true, no longer true, not true yet." |
-| 2:08–2:15 | After hours: certificates sealed and stacked to 1,000 | "And it writes 1,000 new claims, only from sealed records: 992 true when checked." |
-| 2:15–2:23 | Memo "What makes it different": judges facts on their date, not the wording · no LLM · every verdict shows its evidence · calibrated confidence | "The benefit: verdicts you can audit, at a scale no team could read." |
+| 1:55–2:08 | Montage: Gavin's "40 languages" → INVENTED; "€1,049 the same day" → PREMATURE; "10 TB" → TRUE | "It catches all three kinds of lie: never true, no longer true, not true yet." |
+| 2:08–2:16 | After hours: certificates sealed and stacked to 1,000 | "And it writes 1,000 new claims, only from sealed records: 992 true when checked." |
+| 2:16–2:24 | Memo "What makes it different": judges facts on their date, not the wording · no LLM · every verdict shows its evidence · calibrated confidence | "The benefit: verdicts you can audit, at a scale no team could read." |
 
-### 4/4 · Under the hood: implementation, limitations, next step (2:23–2:43)
+### 4/4 · Under the hood: implementation, limitations, next step (2:24–2:44)
 | Time | Shot |
 |---|---|
-| 2:23–2:30 | Memo "Under the hood": Python, numpy, scikit-learn, one Docker image; 19,000 statements in 200 s (limit 1,800 s); 0.8 GB (limit 6 GB); labels 88% (all-true 83%); 1,000 claims, 992 true; Docker vs. trace 400/400; 0 LLMs, no network. |
-| 2:30–2:39 | Memo "What it still misses": catches 45% of the lies in testing (126 of 277); slips on ambiguity (which quarter's revenue?); rumours rarely called unsure (2 of 39). "Next": sharper extraction for ambiguous sentences; a rumour detector; any company, given its names and its documents. |
-| 2:39–2:43 | "POLYGRAPH · TEAM ICARUS" and "Hype is easy to write. Hard to keep consistent. We check the timeline." |
+| 2:24–2:31 | Memo "Under the hood": Python, numpy, scikit-learn, one Docker image; 19,000 statements in 200 s (limit 1,800 s); 0.8 GB (limit 6 GB); labels 88% (all-true 83%); 1,000 claims, 992 true; Docker vs. trace 400/400; 0 LLMs, no network. |
+| 2:31–2:40 | Memo "What it still misses": catches 45% of the lies in testing (126 of 277); slips on ambiguity (which quarter's revenue?); rumours rarely called unsure (2 of 39). "Next": sharper extraction for ambiguous sentences; a rumour detector; any company, given its names and its documents. |
+| 2:40–2:44 | "POLYGRAPH · TEAM ICARUS" and "Hype is easy to write. Hard to keep consistent. We check the timeline." |
 
 ---
 
@@ -223,26 +222,24 @@ each stage, as the organisers ask.
 > renders everything; `--from 1:16 --to 1:40` renders one stretch; `--preview` renders at
 > 480×270 for speed; `--still 1:30` writes one PNG to check a frame.
 >
-> **The live insert (1:32–1:57).** Read the screen recording from `video/inspection/live.mp4` if
-> it exists, scale it into the monitor frame and then full screen as Part 3 says; until it exists,
-> show a placeholder card "LIVE RECORDING · 09:00". Keep it real: never fake the console.
->
 > **Accuracy.** Every number, name, date and sentence on screen comes from Part 2. Don't invent
 > statistics. The tabs name the real module of each step.
 >
 > **Check your work.** Render stills at 0:20, 0:40, 1:05, 1:30, 1:45, 2:15 and 2:55 and look at
 > them: text sharp and readable, nothing off-screen, the palette respected. Then render the full
-> film and check it lasts about 2:43.
+> film and check it lasts about 2:44.
 
 ---
 
 ## Part 5 · Timeline (29 Oct)
 
+The film no longer includes the live run. The challenge README asks that *the video you hand in at
+11:00 shows your frontend running your system live on [the 20 sample rows], beside its architecture
+diagram*: cover that separately, with a short screen recording of `/console.html` and `/inside.html`
+on the sample, or live at the pitch.
+
 | When | What |
 |---|---|
-| Tonight | Build and render the film with the live placeholder; check the stills. |
-| 09:00 | The sample lands in `sample/sample.csv` (pull it in from upstream). Start the server, open `/console.html`, tick the sample, **Build and run in Docker**. |
-| 09:10 | Record the screen (Windows: `Win+Alt+R`, or OBS) for about 2 minutes: the button, Docker Desktop showing the container, the results, then `/inside.html` scrolling two sample sentences through the pipeline. Save it as `video/inspection/live.mp4`. Pick a sample sentence whose case reads well. |
-| 09:30 | Cut the recording to 25 s (speed up the waiting, labelled "×6"), render the final film. |
-| 10:15 | Watch it once, start to finish. Fix only what's wrong. |
-| 10:30 | Export, hand in the video; PR titled "Icarus" open with everything pushed. **No push after 11:00.** |
+| 09:00 | The sample lands in `sample/sample.csv` (pull it in from upstream). Run the live check on it. |
+| 10:15 | Watch the film once, start to finish. Fix only what's wrong. |
+| 10:30 | Hand in the video; PR titled "Icarus" open with everything pushed. **No push after 11:00.** |
